@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 0 0% 100%;
+  }
+}
+
+body {
+  @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-white;
+}
+
+/* Ensure table text is white in dark mode */
+.dark th,
+.dark td,
+.dark input,
+.dark select,
+.dark textarea {
+  @apply text-white;
+}
+
+/* Fix placeholder text color in dark mode */
+.dark input::placeholder,
+.dark select::placeholder,
+.dark textarea::placeholder {
+  @apply text-gray-400;
+}
+
+/* Fix disabled input text color in dark mode */
+.dark input:disabled,
+.dark select:disabled,
+.dark textarea:disabled {
+  @apply text-gray-400 bg-gray-700;
+}

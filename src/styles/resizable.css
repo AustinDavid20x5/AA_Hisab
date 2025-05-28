@@ -1,0 +1,14 @@
+.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.resizing * {
+  cursor: col-resize !important;
+}
+
+.table-cell-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
