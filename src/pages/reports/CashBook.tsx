@@ -42,9 +42,9 @@ type DateRange = 'last_week' | 'last_month' | 'custom';
 export default function CashBook() {
   const [cashBooks, setCashBooks] = useState<CashBook[]>([]);
   const [selectedCashBook, setSelectedCashBook] = useState<CashBook | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange>('last_week');
-  const [customStartDate, setCustomStartDate] = useState<string>('');
-  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [dateRange, setDateRange] = useState<DateRange>('custom');
+  const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [openingBalance, setOpeningBalance] = useState<Balance[]>([]);
   const [closingBalance, setClosingBalance] = useState<Balance[]>([]);
