@@ -78,10 +78,12 @@ function GeneralTrading() {
 
       if (selectedCurrency.exchange_rate_note === 'divide') {
         // For divide method, commission is based on the difference in reciprocal rates
-        commission = Math.abs(amount * (1/purchaseRate - 1/sellingRate));
+        commission = amount * (1/sellingRate - 1/purchaseRate);
+        //commission = Math.abs(amount * (1/purchaseRate - 1/sellingRate));
       } else {
         // For multiply method, commission is based on the difference in rates
-        commission = Math.abs(amount * (sellingRate - purchaseRate));
+        commission = amount * (sellingRate - purchaseRate);
+        //commission = Math.abs(amount * (sellingRate - purchaseRate));
       }
       setFormData(prev => ({ ...prev, commission: commission.toFixed(2) }));
     }
@@ -291,6 +293,10 @@ function GeneralTrading() {
 
       if (isNaN(commission)) {
         toast.error('Invalid commission calculation');
+        return;
+      }
+      if (commission < 0) {
+        toast.error('Commission cannot be negative');
         return;
       }
 

@@ -79,8 +79,7 @@ export default function EditBankTransfer() {
 
     if (!isNaN(amount) && !isNaN(sellingRate) && !isNaN(purchaseRate)) {
       // Calculate commission based on rates per 100K
-      const commission = Math.abs(
-        (amount / 100000) * (sellingRate - purchaseRate));
+      const commission = (amount / 100000) * (sellingRate - purchaseRate);
       setFormData(prev => ({ ...prev, commission: commission.toFixed(2) }));
     }
   }, [formData.amount, formData.sellingRate, formData.purchaseRate]);
@@ -366,6 +365,10 @@ export default function EditBankTransfer() {
 
       if (isNaN(commission)) {
         toast.error('Invalid commission calculation');
+        return;
+      }
+      if (commission < 0) {
+        toast.error('Commission cannot be negative');
         return;
       }
 

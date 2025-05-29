@@ -181,12 +181,14 @@ export default function JournalVoucher() {
     exchangeRate: number
   ): number => {
     if (!currency || amount === 0) return 0;
-    if (currency.is_base) return amount;
+    if (currency.is_base) return Math.round(amount);
 
-    return currency.exchange_rate_note === 'multiply'
-      ? amount * exchangeRate
-      : amount / exchangeRate;
-  };
+    const local = currency.exchange_rate_note === 'multiply'
+    ? amount * exchangeRate
+    : amount / exchangeRate;
+
+  return Math.round(local); // ✅ round to nearest integer
+};
 
   const addLine = () => {
     const baseCurrency = currencies.find(c => c.is_base);
@@ -262,7 +264,7 @@ export default function JournalVoucher() {
             );
           }
         }
-
+        console.log('Updated Line:', updatedLine);
         return updatedLine;
       }
       return line;

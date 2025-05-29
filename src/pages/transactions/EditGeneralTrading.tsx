@@ -77,10 +77,12 @@ export default function EditGeneralTrading() {
 
       if (selectedCurrency.exchange_rate_note === 'divide') {
         // For divide method, commission is based on the difference in reciprocal rates
-        commission = Math.abs(amount * (1/purchaseRate - 1/sellingRate));
+        commission = amount * (1/sellingRate - 1/purchaseRate);
+        //commission = Math.abs(amount * (1/purchaseRate - 1/sellingRate));
       } else {
         // For multiply method, commission is based on the difference in rates
-        commission = Math.abs(amount * (sellingRate - purchaseRate));
+        commission = amount * (sellingRate - purchaseRate);
+        //commission = Math.abs(amount * (sellingRate - purchaseRate));
       }
       setFormData(prev => ({ ...prev, commission: commission.toFixed(2) }));
     }
@@ -295,7 +297,10 @@ export default function EditGeneralTrading() {
         toast.error('Invalid commission calculation');
         return;
       }
-
+      if (commission < 0) {
+        toast.error('Commission cannot be negative');
+        return;
+      }
       // Calculate base currency amounts based on exchange_rate_note
       const customerDebit = calculateBaseAmount(amount, sellingRate, selectedCurrency.exchange_rate_note);
       const supplierCredit = calculateBaseAmount(amount, purchaseRate, selectedCurrency.exchange_rate_note);

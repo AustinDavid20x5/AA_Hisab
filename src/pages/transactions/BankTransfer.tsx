@@ -298,7 +298,11 @@ export default function BankTransfer() {
         toast.error('Invalid commission calculation');
         return;
       }
-
+      if (commission < 0) {
+        toast.error('Commission cannot be negative');
+        return;
+      }
+      
       // Calculate amounts
       const customerDebit = amount + (amount / 100000) * sellingRate;
       const supplierCredit = amount + (amount / 100000) * purchaseRate;
