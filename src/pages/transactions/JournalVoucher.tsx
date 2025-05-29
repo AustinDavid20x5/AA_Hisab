@@ -720,7 +720,7 @@ export default function JournalVoucher() {
                         <option value="">Select Account</option>
                         {accounts.map(account => (
                           <option key={account.id} value={account.id}>
-                            {account.code} - {account.name}
+                            {account.name}
                           </option>
                         ))}
                       </select>

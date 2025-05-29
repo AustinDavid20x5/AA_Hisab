@@ -61,7 +61,7 @@ interface OpeningBalance {
 export default function GeneralLedger() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
-  const [dateRange, setDateRange] = useState<DateRange>('custom');
+  const [dateRange, setDateRange] = useState<DateRange>('last_month');
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [displayMode, setDisplayMode] = useState<DisplayMode>('local');
