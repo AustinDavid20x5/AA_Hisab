@@ -3,6 +3,7 @@ import { CreditCard, ArrowDownToLine, ArrowUpFromLine, Wallet, TrendingUp, Calen
 import { supabase } from '../lib/supabase';
 import { formatAmount } from '../lib/format';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+//import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 interface CashBookBalance {
   balance: number;
@@ -589,177 +590,56 @@ export default function Dashboard() {
     }
   };
 
+  
+
   const fetchTopCustomers = async () => {
     try {
-      // Get business partner subcategory
-      const { data: subcategory, error: subcategoryError } = await supabase
-        .from('subcategories')
-        .select('id')
-        .eq('name', 'Business Partner')
-        .single();
-
-      if (subcategoryError) throw subcategoryError;
-
-      // Get date range for current month
       const startDate = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-
-      // Get all business partner accounts
-      const { data: accounts, error: accountsError } = await supabase
-        .from('chart_of_accounts')
-        .select(`
-          id,
-          name
-        `)
-        .eq('subcategory_id', subcategory.id)
-        .eq('is_active', true);
-
-      if (accountsError) throw accountsError;
-
-      if (!accounts?.length) {
-        setTopCustomers([]);
-        return;
-      }
-
-      // Calculate total debit for each business partner (customers receive debits)
-      const customers: BusinessPartner[] = [];
-
-      for (const account of accounts) {
-        const { data: transactions, error: transactionsError } = await supabase
-          .from('gl_transactions')
-          .select(`
-            debit,
-            header:gl_headers (
-              transaction_date,
-              status
-            )
-          `)
-          .eq('account_id', account.id)
-          .eq('header.status', 'posted')
-          .gte('header.transaction_date', startDate)
-          .lte('header.transaction_date', endDate)
-          .gt('debit', 0); // Only include debit transactions
-
-        if (transactionsError) throw transactionsError;
-
-        if (transactions?.length) {
-          // Calculate total debit directly
-          const totalDebit = transactions.reduce((sum, t) => sum + (t.debit || 0), 0);
-
-          if (totalDebit > 0) {
-            customers.push({
-              id: account.id,
-              name: account.name,
-              balance: totalDebit,
-              currency_code: baseCurrency
-            });
-          }
-        }
-      }
-
-      // Sort by balance descending and take top 5
-      const topCustomers = customers
-        .sort((a, b) => b.balance - a.balance)
-        .slice(0, 5);
-
-      setTopCustomers(topCustomers);
-    } catch (error) {
-      console.error('Error fetching top customers:', error);
-      throw error;
+  
+      const { data, error } = await supabase.rpc('fetch_top_customers', {
+        input_start_date: startDate,
+        input_end_date: endDate,
+        input_subcategory_name: 'Business Partner',
+        input_currency_code: 'AED'
+      });
+  
+      if (error) throw error;
+  
+      setTopCustomers(data || []);
+    } catch (err) {
+      console.error('Error fetching top customers:', err.message);
+      setTopCustomers([]);
     }
   };
+      
 
   const fetchTopSuppliers = async () => {
     try {
-      // Get business partner subcategory
-      const { data: subcategories, error: subcategoryError } = await supabase
-        .from('subcategories')
-        .select('id')
-        .eq('name', 'Business Partner')
-        .limit(1);
-
-      if (subcategoryError) {
-        console.error('Error fetching subcategory:', subcategoryError);
-        toast.error('Failed to fetch business partners');
-        return;
-      }
-
-      // Handle case where no subcategory is found
-      if (!subcategories?.length) {
-        setTopSuppliers([]);
-        return;
-      }
-
-      const subcategoryId = subcategories[0].id;
-
-      // Get date range for current month
+      // Get start and end of selected month
       const startDate = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
       const endDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-
-      // Get all business partner accounts
-      const { data: accounts, error: accountsError } = await supabase
-        .from('chart_of_accounts')
-        .select(`
-          id,
-          name
-        `)
-        .eq('subcategory_id', subcategoryId)
-        .eq('is_active', true);
-
-      if (accountsError) throw accountsError;
-
-      if (!accounts?.length) {
-        setTopSuppliers([]);
+  
+      const { data, error } = await supabase.rpc('fetch_top_suppliers', {
+        input_start_date: startDate,
+        input_end_date: endDate,
+        input_subcategory_name: 'Business Partner', // Suppliers fall under this subcategory
+        input_currency_code: baseCurrency
+      });
+  
+      if (error) {
+        console.error('Error calling RPC:', error);
+        toast.error('Failed to fetch top suppliers');
         return;
       }
-
-      // Calculate total credit for each business partner (suppliers receive credits)
-      const suppliers: BusinessPartner[] = [];
-
-      for (const account of accounts) {
-        const { data: transactions, error: transactionsError } = await supabase
-          .from('gl_transactions')
-          .select(`
-            credit,
-            header:gl_headers (
-              transaction_date,
-              status
-            )
-          `)
-          .eq('account_id', account.id)
-          .eq('header.status', 'posted')
-          .gte('header.transaction_date', startDate)
-          .lte('header.transaction_date', endDate)
-          .gt('credit', 0); // Only include credit transactions
-
-        if (transactionsError) throw transactionsError;
-
-        if (transactions?.length) {
-          // Calculate total credit directly
-          const totalCredit = transactions.reduce((sum, t) => sum + (t.credit || 0), 0);
-
-          if (totalCredit > 0) {
-            suppliers.push({
-              id: account.id,
-              name: account.name,
-              balance: totalCredit,
-              currency_code: baseCurrency
-            });
-          }
-        }
-      }
-
-      // Sort by balance descending and take top 5
-      const topSuppliers = suppliers
-        .sort((a, b) => b.balance - a.balance)
-        .slice(0, 5);
-
-      setTopSuppliers(topSuppliers);
-    } catch (error) {
-      console.error('Error fetching top suppliers:', error);
-      throw error;
+  
+      setTopSuppliers(data || []);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('Unexpected error occurred');
     }
   };
+  
 
   const fetchRecentCashTransactions = async () => {
     try {
@@ -1136,7 +1016,8 @@ export default function Dashboard() {
                     </tr>
                   ))
                 ) : topCommissionTransactions.length > 0 ? (
-                  topCommissionTransactions.map((transaction, index) => (
+                  //topCommissionTransactions.map((transaction, index) => (
+                    topCommissionTransactions.slice(0, 5).map((transaction, index) => (
                     <tr key={index}>
                       <td className="py-3 text-gray-900 dark:text-gray-300">{transaction.date}</td>
                       <td className="py-3 text-gray-900 dark:text-gray-300">{transaction.voucher_no}</td>
