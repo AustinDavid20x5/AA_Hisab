@@ -659,7 +659,7 @@ export default function JournalVoucher() {
         </a>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
@@ -840,7 +840,7 @@ export default function JournalVoucher() {
       </div>
       
       {/* Recent Transactions */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold">Recent Transactions</h2>

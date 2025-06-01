@@ -667,7 +667,7 @@ export default function GeneralLedger() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div>
@@ -698,7 +698,7 @@ export default function GeneralLedger() {
                   />
                 </div>
                 {isDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border dark:border-gray-700 max-h-60 overflow-auto">
+                  <div className="absolute z-10 w-full mt-1 bg-card rounded-lg shadow-lg border dark:border-gray-700 max-h-60 overflow-auto">
                     {filteredAccounts.length > 0 ? (
                       filteredAccounts.map((account) => (
                         <div

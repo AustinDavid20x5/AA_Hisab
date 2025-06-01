@@ -462,7 +462,7 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div>

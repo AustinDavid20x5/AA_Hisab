@@ -481,7 +481,7 @@ export default function CashEntry() {
         <h1 className="text-2xl font-semibold">Cash Entry</h1>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
@@ -650,7 +650,7 @@ export default function CashEntry() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <h2 className="text-lg font-semibold mb-4">Recent Transactions</h2>
           

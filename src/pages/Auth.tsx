@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { FileText, Sun, Moon } from 'lucide-react';
+import { DollarSign, Sun, Moon } from 'lucide-react';
 import { signIn } from '../lib/auth';
-import { useThemeStore } from '../lib/store';
+import { useTheme } from '../components/theme-provider';
 
 export default function Auth() {
   const [email, setEmail] = useState('admin@fintrackpro.com');
@@ -12,7 +12,9 @@ export default function Auth() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { isDarkMode, toggleTheme } = useThemeStore();
+  const { theme, setTheme } = useTheme();
+  const isDarkMode = theme === 'dark';
+  const toggleTheme = () => setTheme(isDarkMode ? 'light' : 'dark');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,10 +49,10 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8 bg-white dark:bg-gray-800 p-8 rounded-xl shadow-lg relative">
+      <div className="w-full max-w-md space-y-8 bg-card p-8 rounded-xl shadow-lg relative">
         <button
           onClick={toggleTheme}
-          className="absolute top-4 right-4 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+          className="absolute top-4 right-4 p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           aria-label="Toggle dark mode"
         >
           {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -58,17 +60,23 @@ export default function Auth() {
 
         <div className="text-center">
           <div className="flex justify-center">
-            <div className="group relative bg-gradient-to-br from-blue-100 via-blue-50 to-blue-200 dark:from-blue-900 dark:via-blue-800 dark:to-blue-950 p-4 rounded-2xl shadow-2xl transform transition-all duration-500 hover:scale-110 hover:-translate-y-2 hover:rotate-3 hover:shadow-blue-500/30 dark:hover:shadow-blue-400/20 border-2 border-blue-200/50 dark:border-blue-700/50 hover:border-blue-400/70 dark:hover:border-blue-500/70">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 via-transparent to-blue-600/20 opacity-0 group-hover:opacity-100 transition-all duration-500 rounded-2xl"></div>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-2xl"></div>
-              <FileText className="w-10 h-10 text-blue-600 dark:text-blue-300 relative z-10 transition-all duration-500 group-hover:text-blue-700 dark:group-hover:text-blue-200 group-hover:scale-110 group-hover:rotate-12 drop-shadow-lg" />
-              <div className="absolute inset-0 rounded-2xl ring-2 ring-blue-400/0 group-hover:ring-blue-400/50 dark:group-hover:ring-blue-300/50 transition-all duration-500"></div>
+            <div className="flex items-center gap-3 group cursor-pointer transition-all duration-500 hover:scale-105">
+              <div className="relative flex aspect-square size-16 items-center justify-center rounded-xl bg-gradient-to-br from-green-400 via-emerald-500 to-green-600 text-white shadow-2xl hover:shadow-green-500/30 transition-all duration-500 hover:rotate-12 hover:scale-110 border border-green-400/20 backdrop-blur-sm">
+                {/* 3D Inner Shadow */}
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent opacity-50"></div>
+                {/* Animated Background Glow */}
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-green-300/40 to-emerald-600/40 animate-pulse opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <DollarSign className="size-8 font-bold relative z-10 transition-all duration-500 group-hover:scale-125 group-hover:rotate-12 drop-shadow-lg" />
+              </div>
+              {/* Floating Particles Effect */}
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-ping transition-all duration-500"></div>
+              <div className="absolute -bottom-1 -left-1 w-1.5 h-1.5 bg-emerald-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-ping transition-all duration-700 delay-200"></div>
             </div>
           </div>
-          <h2 className="mt-8 text-4xl font-bold tracking-tight text-gray-900 dark:text-white bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 dark:from-blue-400 dark:via-purple-400 dark:to-blue-300 bg-clip-text text-transparent drop-shadow-lg transform transition-all duration-300 hover:scale-105 hover:-translate-y-1">
+          <h2 className="mt-8 text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-primary to-foreground bg-clip-text text-transparent group-hover:from-green-600 group-hover:via-emerald-500 group-hover:to-green-600 transition-all duration-500 drop-shadow-sm">
             FinTrack Pro
           </h2>
-          <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium tracking-wide transform transition-all duration-300 hover:text-gray-700 dark:hover:text-gray-300">
+          <p className="mt-3 text-sm text-muted-foreground font-medium tracking-wide transition-colors duration-300">
             Financial Management & Accounting System
           </p>
         </div>

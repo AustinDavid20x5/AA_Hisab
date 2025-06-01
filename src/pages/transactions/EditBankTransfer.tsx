@@ -501,7 +501,7 @@ const supplierCredit = amount + (amount / 100000) * purchaseRate;
       )}
 
       {/* Entry Form */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

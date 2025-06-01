@@ -38,7 +38,7 @@ function DeleteModal({ subCategory, isOpen, onClose, onConfirm }: DeleteModalPro
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <div className="bg-card rounded-lg p-6 w-full max-w-md">
         <div className="flex items-center gap-3 mb-6">
           <div className="bg-red-100 dark:bg-red-900 p-2 rounded-full">
             <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-300" />
@@ -115,7 +115,7 @@ function EditModal({ subCategory, isOpen, onClose, onSave, categories }: EditMod
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+      <div className="bg-card rounded-lg p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">
             {subCategory ? 'Edit Sub Category' : 'Add Sub Category'}
@@ -378,7 +378,7 @@ export default function SubCategories() {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="flex-1 relative">

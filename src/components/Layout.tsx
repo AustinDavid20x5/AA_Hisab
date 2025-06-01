@@ -12,7 +12,7 @@ function LayoutContent() {
 
   return (
     <SidebarInset className={`flex-1 flex-col ${!isResizing ? 'transition-all duration-200 ease-linear' : ''}`}>
-      <div className="flex flex-1 flex-col gap-4 p-4 overflow-y-auto overflow-x-hidden">
+      <div className="flex flex-1 flex-col gap-4 p-4 overflow-y-auto overflow-x-hidden bg-background">
         <Outlet />
       </div>
     </SidebarInset>
