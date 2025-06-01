@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import Auth from './pages/Auth';
-import { useThemeStore } from './lib/store';
+import { ThemeProvider } from './components/theme-provider';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -34,11 +34,9 @@ import CommissionReport from './pages/reports/CommissionReport';
 const NotFound = () => <div>404 - Page Not Found</div>;
 
 function App() {
-  const { isDarkMode } = useThemeStore();
-
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <ThemeProvider defaultTheme="system" storageKey="fintrack-ui-theme">
+      <div className="min-h-screen bg-background text-foreground">
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -83,9 +81,14 @@ function App() {
             </Route>
           </Routes>
         </BrowserRouter>
-        <Toaster position="top-right" />
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            className: 'bg-background text-foreground border border-border',
+          }}
+        />
       </div>
-    </div>
+    </ThemeProvider>
   );
 }
 

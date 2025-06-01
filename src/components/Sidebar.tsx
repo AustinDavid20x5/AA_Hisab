@@ -8,6 +8,8 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const navigation = [
@@ -58,7 +60,12 @@ const navigation = [
   },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  isCollapsed: boolean;
+  onToggle: () => void;
+}
+
+export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['Master Forms', 'Transactions', 'Reports', 'User Management']);
 
   const toggleGroup = (groupName: string) => {
@@ -70,8 +77,21 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="fixed top-0 left-0 z-40 w-64 h-screen pt-20 transition-transform -translate-x-full bg-white border-r border-gray-200 sm:translate-x-0 dark:bg-gray-800 dark:border-gray-700">
-      <div className="h-full px-3 pb-4 overflow-y-auto bg-white dark:bg-gray-800">
+    <aside className={`sidebar fixed top-0 left-0 z-40 h-screen pt-20 transition-all duration-300 bg-sidebar-background border-r border-sidebar-border ${
+      isCollapsed ? 'w-16' : 'w-64'
+    } ${isCollapsed ? '-translate-x-full sm:translate-x-0' : 'translate-x-0'}`}>
+      {/* Toggle Button - Always visible on desktop */}
+      <button
+        onClick={onToggle}
+        className="hidden sm:block fixed top-24 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full p-1.5 shadow-md hover:shadow-lg transition-all duration-300"
+        style={{
+          left: isCollapsed ? '52px' : '244px'
+        }}
+      >
+        {isCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
+      </button>
+      
+      <div className="h-full px-3 pb-4 overflow-y-auto bg-sidebar-background custom-scrollbar">
         <ul className="space-y-2 font-medium">
           {navigation.map((item) => (
             <li key={item.name}>
@@ -80,39 +100,43 @@ export default function Sidebar() {
                   to={item.path}
                   end
                   className={({ isActive }) =>
-                    `flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group ${
-                      isActive ? 'bg-gray-100 dark:bg-gray-700' : ''
+                    `flex items-center p-2 text-sidebar-foreground rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group transition-colors ${
+                      isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
                     }`
                   }
+                  title={isCollapsed ? item.name : ''}
                 >
-                  <item.icon className="w-5 h-5" />
-                  <span className="ml-3">{item.name}</span>
+                  <item.icon className="w-5 h-5 flex-shrink-0 text-sidebar-foreground group-hover:text-sidebar-accent-foreground" />
+                  {!isCollapsed && <span className="ml-3">{item.name}</span>}
                 </NavLink>
               ) : (
                 <>
                   <div
-                    className="flex items-center justify-between p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                    className="flex items-center justify-between p-2 text-sidebar-foreground rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground cursor-pointer transition-colors"
                     onClick={() => toggleGroup(item.name)}
+                    title={isCollapsed ? item.name : ''}
                   >
                     <div className="flex items-center">
-                      <item.icon className="w-5 h-5" />
-                      <span className="ml-3">{item.name}</span>
+                      <item.icon className="w-5 h-5 flex-shrink-0 text-sidebar-foreground" />
+                      {!isCollapsed && <span className="ml-3">{item.name}</span>}
                     </div>
-                    {expandedGroups.includes(item.name) ? (
-                      <ChevronDown className="w-4 h-4" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4" />
+                    {!isCollapsed && (
+                      expandedGroups.includes(item.name) ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )
                     )}
                   </div>
-                  {expandedGroups.includes(item.name) && (
+                  {!isCollapsed && expandedGroups.includes(item.name) && (
                     <ul className="ml-6 space-y-2 mt-2">
                       {item.children.map((child) => (
                         <li key={child.path}>
                           <NavLink
                             to={child.path}
                             className={({ isActive }) =>
-                              `flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group ${
-                                isActive ? 'bg-gray-100 dark:bg-gray-700' : ''
+                              `flex items-center p-2 text-sidebar-foreground rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group transition-colors ${
+                                isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground' : ''
                               }`
                             }
                           >

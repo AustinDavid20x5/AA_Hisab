@@ -451,7 +451,7 @@ export default function Currency() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-screen bg-background">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Currency Management</h1>
         <button

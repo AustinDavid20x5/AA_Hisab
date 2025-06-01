@@ -58,14 +58,17 @@ export default function Auth() {
 
         <div className="text-center">
           <div className="flex justify-center">
-            <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-full">
-              <FileText className="w-8 h-8 text-blue-600 dark:text-blue-300" />
+            <div className="group relative bg-gradient-to-br from-blue-100 via-blue-50 to-blue-200 dark:from-blue-900 dark:via-blue-800 dark:to-blue-950 p-4 rounded-2xl shadow-2xl transform transition-all duration-500 hover:scale-110 hover:-translate-y-2 hover:rotate-3 hover:shadow-blue-500/30 dark:hover:shadow-blue-400/20 border-2 border-blue-200/50 dark:border-blue-700/50 hover:border-blue-400/70 dark:hover:border-blue-500/70">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400/20 via-transparent to-blue-600/20 opacity-0 group-hover:opacity-100 transition-all duration-500 rounded-2xl"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out rounded-2xl"></div>
+              <FileText className="w-10 h-10 text-blue-600 dark:text-blue-300 relative z-10 transition-all duration-500 group-hover:text-blue-700 dark:group-hover:text-blue-200 group-hover:scale-110 group-hover:rotate-12 drop-shadow-lg" />
+              <div className="absolute inset-0 rounded-2xl ring-2 ring-blue-400/0 group-hover:ring-blue-400/50 dark:group-hover:ring-blue-300/50 transition-all duration-500"></div>
             </div>
           </div>
-          <h2 className="mt-6 text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <h2 className="mt-8 text-4xl font-bold tracking-tight text-gray-900 dark:text-white bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 dark:from-blue-400 dark:via-purple-400 dark:to-blue-300 bg-clip-text text-transparent drop-shadow-lg transform transition-all duration-300 hover:scale-105 hover:-translate-y-1">
             FinTrack Pro
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 font-medium tracking-wide transform transition-all duration-300 hover:text-gray-700 dark:hover:text-gray-300">
             Financial Management & Accounting System
           </p>
         </div>
