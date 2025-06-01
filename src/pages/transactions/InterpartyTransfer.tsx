@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import EditTransactionModal from '../../components/EditTransactionModal';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface BusinessPartner {
   id: string;
@@ -409,14 +410,7 @@ export default function InterpartyTransfer() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading Interparty Transfer..." />;
   }
 
   return (
@@ -430,7 +424,7 @@ export default function InterpartyTransfer() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Date
                 </label>
                 <input
@@ -445,7 +439,7 @@ export default function InterpartyTransfer() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   From Partner
                 </label>
                 <select
@@ -467,7 +461,7 @@ export default function InterpartyTransfer() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   To Partner
                 </label>
                 <select
@@ -489,7 +483,7 @@ export default function InterpartyTransfer() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Narration
                 </label>
                 <input
@@ -504,7 +498,7 @@ export default function InterpartyTransfer() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Amount
                 </label>
                 <input
@@ -517,7 +511,7 @@ export default function InterpartyTransfer() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Commission (Optional)
                 </label>
                 <input

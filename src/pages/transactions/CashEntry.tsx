@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import EditTransactionModal from '../../components/EditTransactionModal';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface CashBook {
   id: string;
@@ -465,14 +466,7 @@ export default function CashEntry() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading Cash Entry..." />;
   }
 
   return (
@@ -485,7 +479,7 @@ export default function CashEntry() {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Cash Book
               </label>
               <select
@@ -513,16 +507,16 @@ export default function CashEntry() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Currency
               </label>
-              <div className="px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
+              <div className="px-3 py-2 border rounded-lg bg-background dark:bg-gray-700 dark:border-gray-600">
                 {selectedCashBook?.currency.code || '-'}
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Current Balance
               </label>
               <div className={`px-3 py-2 border rounded-lg font-mono text-lg ${
@@ -543,7 +537,7 @@ export default function CashEntry() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Date
                 </label>
                 <input
@@ -556,7 +550,7 @@ export default function CashEntry() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Business Partner
                 </label>
                 <select
@@ -578,7 +572,7 @@ export default function CashEntry() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Narration
                 </label>
                 <input
@@ -592,7 +586,7 @@ export default function CashEntry() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Amount
                 </label>
                 <input
@@ -607,7 +601,7 @@ export default function CashEntry() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Exchange Rate
                 </label>
                 <input

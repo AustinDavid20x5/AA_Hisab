@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import EditTransactionModal from '../../components/EditTransactionModal';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Currency {
   id: string;
@@ -493,14 +494,7 @@ function GeneralTrading() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading General Trading..." />;
   }
 
   return (
@@ -514,7 +508,7 @@ function GeneralTrading() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Date
                 </label>
                 <input
@@ -529,7 +523,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Currency
                 </label>
                 <select
@@ -551,7 +545,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Customer
                 </label>
                 <select
@@ -573,7 +567,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Supplier
                 </label>
                 <select
@@ -595,7 +589,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Narration
                 </label>
                 <input
@@ -609,7 +603,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Amount
                 </label>
                 <input
@@ -624,7 +618,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Selling Rate
                 </label>
                 <input
@@ -639,7 +633,7 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Purchase Rate
                 </label>
                 <input
@@ -654,13 +648,13 @@ function GeneralTrading() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   Commission
                 </label>
                 <input
                   type="text"
                   value={formData.commission}
-                  className="w-full px-3 py-2 border rounded-lg bg-gray-100 dark:bg-gray-600 dark:border-gray-500"
+                  className="w-full px-3 py-2 border rounded-lg bg-background dark:border-gray-500"
                   readOnly
                 />
               </div>

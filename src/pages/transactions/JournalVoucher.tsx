@@ -7,6 +7,7 @@ import { formatAmount } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import EditTransactionModal from '../../components/EditTransactionModal';
 import * as XLSX from 'xlsx';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Account {
   id: string;
@@ -616,14 +617,7 @@ export default function JournalVoucher() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading Journal Voucher..." />;
   }
 
   return (
@@ -663,7 +657,7 @@ export default function JournalVoucher() {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Date
               </label>
               <input
@@ -676,7 +670,7 @@ export default function JournalVoucher() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Narration
               </label>
               <input
@@ -815,7 +809,7 @@ export default function JournalVoucher() {
           <div className="mt-4 flex justify-between">
             <button
               onClick={addLine}
-              className="flex items-center gap-2 px-4 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/50 dark:hover:bg-blue-900/75"
+              className="flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
               Add Line

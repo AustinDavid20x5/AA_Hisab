@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase, verifyConnection } from '../../lib/supabase';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Currency {
   id: string;
@@ -440,14 +441,7 @@ export default function Currency() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading Currency Management..." />;
   }
 
   return (

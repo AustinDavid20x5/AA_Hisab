@@ -10,6 +10,7 @@ import { formatAmount } from '../../lib/format';
 import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { ResizableHeader } from '../../components/ResizableHeader';
 import '../../styles/resizable.css';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Account {
   id: string;
@@ -72,7 +73,7 @@ export default function GeneralLedger() {
   const [searchColumn, setSearchColumn] = useState<SearchColumn>('all');
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [sortColumn, setSortColumn] = useState<SortColumn>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
   const [showFilterDropdown, setShowFilterDropdown] = useState<string | null>(null);
   const [currencies, setCurrencies] = useState<{ id: string; code: string }[]>([]);
@@ -142,11 +143,13 @@ export default function GeneralLedger() {
     loadCurrencies();
   }, []);
 
-  useEffect(() => {
+  const handleGenerateReport = () => {
     if (selectedAccount) {
       fetchTransactions();
+    } else {
+      toast.error('Please select an account first');
     }
-  }, [selectedAccount, dateRange, customStartDate, customEndDate, displayMode]);
+  };
 
   useEffect(() => {
     const filtered = filterAndSortTransactions();
@@ -356,14 +359,20 @@ export default function GeneralLedger() {
         .filter((t): t is Transaction => t !== null)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-        // Calculate totals
-    const newTotals = formattedTransactions.reduce(
+        // Calculate totals including opening balance
+    const transactionTotals = formattedTransactions.reduce(
       (acc, t) => ({
         debit: acc.debit + t.debit,
         credit: acc.credit + t.credit
       }),
       { debit: 0, credit: 0 }
     );
+    
+    // Add opening balance to totals
+    const newTotals = {
+      debit: transactionTotals.debit + (openingBalanceAmount > 0 ? openingBalanceAmount : 0),
+      credit: transactionTotals.credit + (openingBalanceAmount < 0 ? Math.abs(openingBalanceAmount) : 0)
+    };
 
       setTransactions(formattedTransactions);
       setTotals(newTotals); // Update totals state
@@ -427,7 +436,12 @@ export default function GeneralLedger() {
       let comparison = 0;
       switch (sortColumn) {
         case 'date':
-          comparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+          // Parse dd/MM/yyyy format correctly
+          const parseDate = (dateStr: string) => {
+            const [day, month, year] = dateStr.split('/');
+            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          };
+          comparison = parseDate(a.date).getTime() - parseDate(b.date).getTime();
           break;
         case 'type':
           comparison = a.transaction_type.localeCompare(b.transaction_type);
@@ -635,14 +649,7 @@ export default function GeneralLedger() {
   }
 
   if (isLoading) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading General Ledger..." />;
   }
 
   return (
@@ -669,27 +676,24 @@ export default function GeneralLedger() {
 
       <div className="bg-card rounded-lg shadow">
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {/* Row 1: Account Field (Full Width) */}
+          <div className="grid grid-cols-1 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Account
               </label>
               <div className="relative" ref={dropdownRef}>
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 text-gray-400 w-5 h-5 pointer-events-none" />
                   <input
-      type="text"
-      value={
-        searchTerm || 
-        (selectedAccount && accounts.find(a => a.id === selectedAccount)?.name) || 
-        ''
-      }
+                    type="text"
+                    value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
                       setIsDropdownOpen(true);
                     }}
                     onFocus={() => setIsDropdownOpen(true)}
-                    placeholder="Search accounts..."
+                    placeholder={selectedAccount ? accounts.find(a => a.id === selectedAccount)?.name || "Search accounts..." : "Search accounts..."}
                     className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <ChevronDown 
@@ -698,19 +702,20 @@ export default function GeneralLedger() {
                   />
                 </div>
                 {isDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-1 bg-card rounded-lg shadow-lg border dark:border-gray-700 max-h-60 overflow-auto">
+                  <div className="absolute z-10 w-full mt-1 bg-card text-card-foreground rounded-lg shadow-lg border dark:border-gray-700 max-h-60 overflow-auto">
                     {filteredAccounts.length > 0 ? (
                       filteredAccounts.map((account) => (
                         <div
                           key={account.id}
-                          className="px-4 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="px-4 py-3 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-black dark:hover:text-black transition-colors duration-150 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                           onClick={() => {
                             setSelectedAccount(account.id);
                             setSearchTerm('');
                             setIsDropdownOpen(false);
                           }}
                         >
-                          {account.name}
+                          <div className="font-medium">{account.name}</div>
+                          <div className="text-xs opacity-70">{account.code}</div>
                         </div>
                       ))
                     ) : (
@@ -722,9 +727,12 @@ export default function GeneralLedger() {
                 )}
               </div>
             </div>
+          </div>
 
+          {/* Row 2: Date Range Fields with Generate Button */}
+          <div className={`grid gap-4 mb-4 ${dateRange === 'custom' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Date Range
               </label>
               <select
@@ -741,7 +749,7 @@ export default function GeneralLedger() {
             {dateRange === 'custom' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     From Date
                   </label>
                   <input
@@ -753,7 +761,7 @@ export default function GeneralLedger() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     To Date
                   </label>
                   <input
@@ -765,6 +773,18 @@ export default function GeneralLedger() {
                 </div>
               </>
             )}
+
+            {/* Generate Button */}
+            <div className="flex items-end">
+              <button
+                onClick={handleGenerateReport}
+                disabled={!selectedAccount}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                <Filter className="w-4 h-4" />
+                 Generate
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-4 mb-6">
@@ -793,7 +813,7 @@ export default function GeneralLedger() {
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Currency Display:
             </label>
             <div className="flex gap-6">
@@ -806,7 +826,7 @@ export default function GeneralLedger() {
                   checked={displayMode === 'local'}
                   onChange={(e) => setDisplayMode(e.target.value as DisplayMode)}
                 />
-                <span className="ml-2 text-gray-700 dark:text-gray-300">
+                <span className="ml-2 text-foreground">
                   Display without document currency
                 </span>
               </label>
@@ -819,24 +839,14 @@ export default function GeneralLedger() {
                   checked={displayMode === 'document'}
                   onChange={(e) => setDisplayMode(e.target.value as DisplayMode)}
                 />
-                <span className="ml-2 text-gray-700 dark:text-gray-300">
+                <span className="ml-2 text-foreground">
                   Display with document currency
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Opening Balance Section */}
-          {selectedAccount && (
-            <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-medium text-blue-800 dark:text-blue-300">Opening Balance</h3>
-                <span className="text-lg font-bold text-blue-800 dark:text-blue-300">
-                  {formatAmount(openingBalance.balance)}
-                </span>
-              </div>
-            </div>
-          )}
+
 
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -847,12 +857,7 @@ export default function GeneralLedger() {
                     width={columnWidths.date}
                     className="pb-3 font-semibold"
                   >
-                    <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('date')}>
-                      <span>Date</span>
-                      {sortColumn === 'date' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Date</span>
                   </ResizableHeader>
 
                   <ResizableHeader
@@ -860,12 +865,7 @@ export default function GeneralLedger() {
                     width={columnWidths.type}
                     className="pb-3 font-semibold"
                   >
-                    <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('type')}>
-                      <span>Type</span>
-                      {sortColumn === 'type' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Type</span>
                   </ResizableHeader>
 
                   <ResizableHeader
@@ -873,12 +873,7 @@ export default function GeneralLedger() {
                     width={columnWidths.narration}
                     className="pb-3 font-semibold"
                   >
-                    <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('narration')}>
-                      <span>Description</span>
-                      {sortColumn === 'narration' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Description</span>
                   </ResizableHeader>
 
                   {displayMode === 'document' && (
@@ -896,12 +891,7 @@ export default function GeneralLedger() {
                         width={columnWidths.currency}
                         className="pb-3 font-semibold"
                       >
-                        <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('currency')}>
-                          <span>Currency</span>
-                          {sortColumn === 'currency' && (
-                            sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                          )}
-                        </div>
+                        <span>Currency</span>
                       </ResizableHeader>
 
                       <ResizableHeader
@@ -909,12 +899,7 @@ export default function GeneralLedger() {
                         width={columnWidths.rate}
                         className="pb-3 font-semibold text-right"
                       >
-                        <div className="flex items-center gap-1 cursor-pointer" onClick={() => handleSort('rate')}>
-                          <span>Rate</span>
-                          {sortColumn === 'rate' && (
-                            sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                          )}
-                        </div>
+                        <span>Rate</span>
                       </ResizableHeader>
                     </>
                   )}
@@ -924,12 +909,7 @@ export default function GeneralLedger() {
                     width={columnWidths.debit}
                     className="pb-3 font-semibold text-right"
                   >
-                    <div className="flex items-center justify-end gap-1 cursor-pointer" onClick={() => handleSort('debit')}>
-                      <span>Debit</span>
-                      {sortColumn === 'debit' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Debit</span>
                   </ResizableHeader>
 
                   <ResizableHeader
@@ -937,12 +917,7 @@ export default function GeneralLedger() {
                     width={columnWidths.credit}
                     className="pb-3 font-semibold text-right"
                   >
-                    <div className="flex items-center justify-end gap-1 cursor-pointer" onClick={() => handleSort('credit')}>
-                      <span>Credit</span>
-                      {sortColumn === 'credit' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Credit</span>
                   </ResizableHeader>
 
                   <ResizableHeader
@@ -950,19 +925,14 @@ export default function GeneralLedger() {
                     width={columnWidths.balance}
                     className="pb-3 font-semibold text-right"
                   >
-                    <div className="flex items-center justify-end gap-1 cursor-pointer" onClick={() => handleSort('balance')}>
-                      <span>Balance</span>
-                      {sortColumn === 'balance' && (
-                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
+                    <span>Balance</span>
                   </ResizableHeader>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-gray-700">
                 {/* Opening Balance Row */}
                 {selectedAccount && (
-                  <tr className="bg-blue-50 dark:bg-blue-900/10">
+                  <tr>
                     <td className="py-3 font-medium" style={{ width: columnWidths.date }}>
                       Opening Balance
                     </td>
@@ -1066,9 +1036,7 @@ export default function GeneralLedger() {
       {formatAmount(totals.credit)}
     </td>
     <td className="py-3 text-right" style={{ width: columnWidths.balance }}>
-      {formatAmount(filteredTransactions.length > 0 
-        ? filteredTransactions[filteredTransactions.length - 1].running_balance 
-        : openingBalance.balance)}
+      {formatAmount(totals.debit - totals.credit)}
     </td>
   </tr>
 </tfoot>

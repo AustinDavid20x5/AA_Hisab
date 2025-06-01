@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { formatAmount } from '../../lib/format';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface CashBook {
   id: string;
@@ -438,14 +439,7 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
   }
 
   if (isLoading && !cashBooks.length) {
-    return (
-      <div className="p-4 text-center">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mx-auto mb-4"></div>
-          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner title="Loading Cash Book Report..." />;
   }
 
   return (

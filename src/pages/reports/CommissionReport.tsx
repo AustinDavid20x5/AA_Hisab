@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { getDateRange } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import { supabase } from '../../lib/supabase';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Transaction {
   date: string;
@@ -323,6 +324,10 @@ const CommissionReport = () => {
     }
   };
 
+  if (isLoading && filteredTransactions.length === 0) {
+    return <LoadingSpinner title="Loading Commission Report..." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -416,7 +421,7 @@ const CommissionReport = () => {
               {filteredTransactions.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-4 text-center text-gray-500 dark:text-gray-400">
-                    {isLoading ? 'Loading transactions...' : 'No transactions found for the selected criteria'}
+                    No transactions found for the selected criteria
                   </td>
                 </tr>
               )}
