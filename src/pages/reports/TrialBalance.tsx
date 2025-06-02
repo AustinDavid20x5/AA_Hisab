@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, ChevronDown, ChevronUp, FileSpreadsheet, FileText, Printer } from 'lucide-react';
+import { Plus, Search, Filter, ChevronDown, ChevronUp, FileSpreadsheet, FileText, Printer, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
@@ -291,8 +291,376 @@ export default function TrialBalance() {
     }
   };
 
+  const formatDateForPrint = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const getCurrentDateTimeFormatted = () => {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
   const handlePrint = () => {
-    window.print();
+    try {
+      // Create a temporary print container
+      const printContainer = document.createElement('div');
+      printContainer.id = 'print-container';
+      printContainer.innerHTML = `
+        <div class="print-running-header">
+          <div class="print-header-content">
+            <div class="print-left-section">
+              <div class="print-logo-container">
+                <div class="print-logo-icon">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="2" x2="12" y2="22"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                  </svg>
+                </div>
+                <div class="print-company-info">
+                  <div class="print-logo-title">FinTrack Pro</div>
+                  <div class="print-logo-subtitle">Financial Management</div>
+                </div>
+              </div>
+            </div>
+            <div class="print-center-section">
+              <div class="print-report-title">Trial Balance</div>
+            </div>
+            <div class="print-right-section">
+              <div class="print-date">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+            </div>
+          </div>
+        </div>
+        <div class="print-main-content">
+          <div class="print-report-info">
+            <p>Report Date: ${formatDateForPrint(selectedDate)}</p>
+            ${baseCurrency ? `<p>Currency: ${baseCurrency.code} - ${baseCurrency.name}</p>` : ''}
+          </div>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>Account Code</th>
+                <th>Account Name</th>
+                <th>Sub Category</th>
+                <th class="number">Debit</th>
+                <th class="number">Credit</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredAccounts.map(account => `
+                <tr>
+                  <td>${account.code}</td>
+                  <td>${account.name}</td>
+                  <td>${account.subcategory}</td>
+                  <td class="number">${formatAmount(account.debit)}</td>
+                  <td class="number">${formatAmount(account.credit)}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="3"><strong>Total</strong></td>
+                <td class="number"><strong>${formatAmount(totals.debit)}</strong></td>
+                <td class="number"><strong>${formatAmount(totals.credit)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      // Add print styles
+      const printStyles = document.createElement('style');
+      printStyles.id = 'print-styles';
+      printStyles.innerHTML = `
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          /* Define the page layout with running header */
+          @page {
+            size: A4;
+            margin: 1.5in 0.75in 0.5in 0.75in; /* Extra top margin for header */
+            
+            /* Explicitly remove browser default headers/footers */
+            @top-left { content: none !important; }
+            @top-center { content: none !important; }
+            @top-right { content: none !important; }
+            @bottom-left { content: none !important; }
+            @bottom-center { content: none !important; }
+            @bottom-right { content: none !important; }
+            
+            /* Define custom running header */
+            @top {
+              content: element(pageHeader);
+            }
+          }
+          
+          /* Hide everything except print container */
+          html, body {
+            width: 100%;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            overflow: visible !important;
+          }
+          
+          body {
+            background: white !important;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+          }
+          
+          body > *:not(#print-container) { 
+            display: none !important; 
+          }
+          
+          /* Main print container */
+          #print-container {
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            font-family: Arial, sans-serif;
+            color: #000 !important;
+            background: white !important;
+            overflow: visible;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+          }
+          
+          /* Running header that repeats on every page */
+          .print-running-header {
+            position: running(pageHeader) !important;
+            width: 100% !important;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #333 !important;
+            margin-bottom: 20px;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          .print-header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .print-left-section {
+            display: flex;
+            align-items: center;
+            flex: 1;
+          }
+          .print-center-section {
+            flex: 1;
+            text-align: center;
+          }
+          .print-right-section {
+            flex: 1;
+            text-align: right;
+          }
+          .print-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .print-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #22c55e 0%, #10b981 50%, #22c55e 100%) !important;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-print-color-adjust: exact !important;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+            border: 1px solid rgba(34, 197, 94, 0.2) !important;
+          }
+          .print-logo-icon svg {
+            color: white !important;
+            stroke: white !important;
+            fill: none !important;
+            font-weight: bold;
+          }
+          .print-company-info {
+            display: flex;
+            flex-direction: column;
+          }
+          .print-logo-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-logo-subtitle {
+            font-size: 8px;
+            color: #666 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-date {
+            font-size: 9px;
+            color: #666 !important;
+            margin: 0;
+          }
+          .print-report-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+          }
+          .print-report-info {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #000 !important;
+          }
+          .print-report-info p {
+            margin: 2px 0;
+            color: #000 !important;
+          }
+          /* Main content area that starts after the header */
+          .print-main-content {
+            margin-top: 0.5in; /* Space after the running header */
+            padding-top: 0;
+            width: 100%;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+            background: white !important;
+            page-break-inside: auto;
+            table-layout: fixed;
+            border-spacing: 0;
+          }
+          .print-table thead {
+            display: table-header-group !important;
+            background: white !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            position: static !important;
+          }
+          .print-table thead tr {
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-inside: avoid !important;
+            background: white !important;
+            display: table-row !important;
+          }
+          .print-table th {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background-color: #f5f5f5 !important;
+            font-weight: bold;
+            -webkit-print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table tbody {
+            display: table-row-group !important;
+            background: white !important;
+            page-break-after: auto;
+          }
+          .print-table td {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background: white !important;
+            page-break-inside: avoid;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table .number {
+            text-align: right;
+          }
+          .print-table .total-row {
+            font-weight: bold;
+            background-color: #f9f9f9 !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table tr {
+            page-break-inside: avoid;
+            background: white !important;
+          }
+          .print-table tbody {
+            background: white !important;
+          }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            max-height: none !important;
+          }
+          * {
+            box-sizing: border-box !important;
+          }
+          #print-container {
+            page-break-after: auto;
+          }
+          .print-table tbody {
+            page-break-after: auto;
+          }
+          .print-page-header {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+          }
+          .print-report-info {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+            margin-bottom: 10px;
+          }
+          .print-table {
+            page-break-before: avoid;
+          }
+          .print-table tbody tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          .print-table .total-row {
+            page-break-before: avoid;
+            page-break-after: auto;
+          }
+        }
+      `;
+
+      // Add elements to document
+      document.head.appendChild(printStyles);
+      document.body.appendChild(printContainer);
+
+      // Print
+      window.print();
+
+      // Clean up
+      setTimeout(() => {
+        document.head.removeChild(printStyles);
+        document.body.removeChild(printContainer);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Print error:', error);
+      toast.error('Print failed.');
+    }
   };
 
   const totals = {
@@ -328,21 +696,21 @@ export default function TrialBalance() {
         <div className="flex gap-2">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transform transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-b-4 border-blue-800 hover:border-blue-900"
           >
             <Printer className="w-4 h-4" />
             Print
           </button>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transform transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-b-4 border-green-800 hover:border-green-900"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
           <button
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transform transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-b-4 border-red-800 hover:border-red-900"
           >
             <FileText className="w-4 h-4" />
             PDF
@@ -353,18 +721,23 @@ export default function TrialBalance() {
       <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search accounts..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Account Selector
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search accounts..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 As of Date
               </label>
               <input
@@ -382,13 +755,13 @@ export default function TrialBalance() {
               <thead>
                 <tr className="text-left border-b dark:border-gray-700">
                   <th className="pb-3 font-semibold">
-                    {renderColumnHeader('subcategory', 'Sub Category')}
-                  </th>
-                  <th className="pb-3 font-semibold">
                     {renderColumnHeader('code', 'Account Code')}
                   </th>
                   <th className="pb-3 font-semibold">
                     {renderColumnHeader('name', 'Account Name')}
+                  </th>
+                  <th className="pb-3 font-semibold">
+                    {renderColumnHeader('subcategory', 'Sub Category')}
                   </th>
                   <th className="pb-3 font-semibold w-48">
                     <div className="text-right">
@@ -405,9 +778,9 @@ export default function TrialBalance() {
               <tbody className="divide-y dark:divide-gray-700">
                 {filteredAccounts.map((account) => (
                   <tr key={account.code}>
-                    <td className="py-3">{account.subcategory}</td>
                     <td className="py-3">{account.code}</td>
                     <td className="py-3">{account.name}</td>
+                    <td className="py-3">{account.subcategory}</td>
                     <td className="py-3 text-right">{formatAmount(account.debit)}</td>
                     <td className="py-3 text-right">{formatAmount(account.credit)}</td>
                   </tr>
