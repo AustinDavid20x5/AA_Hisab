@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
+import { AppLogo } from '../../components/AppLogo';
+import * as XLSX from 'xlsx-js-style';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { getDateRange } from '../../lib/format';
@@ -270,11 +271,41 @@ const CommissionReport = () => {
         format: 'a4'
       });
 
+      // Add app logo (matching Layout.tsx gradient design)
+      // Create gradient effect with multiple rectangles
+      doc.setFillColor(74, 222, 128); // green-400
+      doc.roundedRect(14, 8, 12, 12, 3, 3, 'F');
+      doc.setFillColor(16, 185, 129); // emerald-500 overlay
+      doc.roundedRect(14.5, 8.5, 11, 11, 2.5, 2.5, 'F');
+      doc.setFillColor(34, 197, 94); // green-600 center
+      doc.roundedRect(15, 9, 10, 10, 2, 2, 'F');
+      
+      // Add dollar sign
+      doc.setTextColor(255, 255, 255); // White text
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('$', 18.5, 16);
+      
+      // Reset text color to black
+      doc.setTextColor(0, 0, 0);
+      
+      // Add app name and header
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FinTrack Pro', 30, 14);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Financial Management System', 30, 19);
+      
+      // Add title and period info
       doc.setFontSize(16);
-      doc.text('Commission Report', 14, 15);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Commission Report', 14, 30);
 
       doc.setFontSize(10);
-      doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, 14, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Period: ${format(new Date(startDate), 'dd/MM/yyyy')} to ${format(new Date(endDate), 'dd/MM/yyyy')}`, 14, 38);
 
       const columns = [
         'Date',
@@ -297,7 +328,7 @@ const CommissionReport = () => {
       ]);
 
       (doc as any).autoTable({
-        startY: 30,
+        startY: 43,
         head: [columns],
         body: data,
         theme: 'grid',

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, ChevronDown, ChevronUp, FileSpreadsheet, FileText, Printer, DollarSign } from 'lucide-react';
+import { AppLogo } from '../../components/AppLogo';
+import { generatePrintLogoHTML } from '../../lib/printLogo';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { format } from 'date-fns';
 
 interface Account {
   code: string;
@@ -181,27 +184,185 @@ export default function TrialBalance() {
 
   const exportToExcel = () => {
     try {
-      const exportData = accounts.map(account => ({
-        'Sub Category': account.subcategory,
-        'Account Code': account.code,
-        'Account Name': account.name,
-        'Debit': formatAmount(account.debit),
-        'Credit': formatAmount(account.credit)
-      }));
-
-      exportData.push({
-        'Sub Category': '',
-        'Account Code': '',
-        'Account Name': 'Total',
-        'Debit': formatAmount(totals.debit),
-        'Credit': formatAmount(totals.credit)
-      });
-
-      const ws = XLSX.utils.json_to_sheet(exportData);
+      // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
+      
+      // Format dates in DD/MM/YYYY format
+      const formatDateDDMMYYYY = (date: Date) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+      
+      const formatDateTimeDDMMYYYY = () => {
+        const now = new Date();
+        const day = now.getDate().toString().padStart(2, '0');
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+      };
+      
+      // Prepare header information with logo placeholder
+      const headerData = [
+        ['🏢 FinTrack Pro - Financial Management System'], // Added emoji as logo placeholder
+        ['Trial Balance'],
+        [''],
+        [`Report Date: ${formatDateDDMMYYYY(new Date(selectedDate))}`],
+        [`Currency: ${baseCurrency ? `${baseCurrency.code} - ${baseCurrency.name}` : 'N/A'}`],
+        [`Print Date & Time: ${formatDateTimeDDMMYYYY()}`],
+        [''],
+        [''] // Extra space before table
+      ];
+      
+      // Prepare table headers - matching display order
+      const tableHeaders = ['Account Code', 'Account Name', 'Sub Category', 'Debit', 'Credit'];
+      
+      // Prepare data for export
+      const exportData = [];
+      
+      // Add account rows with proper data types - matching display order
+      accounts.forEach(account => {
+        exportData.push([
+          account.code,
+          account.name,
+          account.subcategory,
+          account.debit, // Keep as number
+          account.credit // Keep as number
+        ]);
+      });
+      
+      // Add totals row with proper number formatting
+      const totalsRow = [
+        '',
+        'Total',
+        '',
+        totals.debit,
+        totals.credit
+      ];
+      
+      exportData.push(totalsRow);
+      
+      // Combine all data
+      const allData = [
+        ...headerData,
+        tableHeaders,
+        ...exportData
+      ];
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+      
+      // Set column widths - matching new column order
+      const colWidths = [
+        { wch: 15 }, // Account Code
+        { wch: 30 }, // Account Name
+        { wch: 20 }, // Sub Category
+        { wch: 15 }, // Debit
+        { wch: 15 }  // Credit
+      ];
+      
+      ws['!cols'] = colWidths;
+      
+      // Style the header rows
+      const headerRowCount = headerData.length;
+      const tableHeaderRow = headerRowCount;
+      const totalsRowIndex = headerRowCount + 1 + exportData.length - 1;
+      
+      // Apply styles to specific cells
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      
+      // Style company name (first row) - LEFT ALIGNED
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 16 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+      
+      // Style report title (second row) - LEFT ALIGNED
+      if (ws['A2']) {
+        ws['A2'].s = {
+          font: { bold: true, sz: 14 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+      
+      // Style table headers
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRow, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'F0F0F0' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            }
+          };
+        }
+      }
+      
+      // Define number format for currency
+      const currencyFormat = '#,##0.00';
+      
+      // Get column indices for different data types - updated for new column order
+      const debitColIndex = 3;  // Debit column (4th column)
+      const creditColIndex = 4; // Credit column (5th column)
+      
+      // Apply number formatting to data rows
+      for (let row = headerRowCount + 1; row <= headerRowCount + exportData.length; row++) {
+        // Format debit column
+        const debitCellAddress = XLSX.utils.encode_cell({ r: row, c: debitColIndex });
+        if (ws[debitCellAddress]) {
+          ws[debitCellAddress].s = {
+            numFmt: currencyFormat,
+            alignment: { horizontal: 'right' }
+          };
+        }
+        
+        // Format credit column
+        const creditCellAddress = XLSX.utils.encode_cell({ r: row, c: creditColIndex });
+        if (ws[creditCellAddress]) {
+          ws[creditCellAddress].s = {
+            numFmt: currencyFormat,
+            alignment: { horizontal: 'right' }
+          };
+        }
+      }
+      
+      // Style totals row
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: totalsRowIndex, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E6F3FF' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            },
+            numFmt: col >= debitColIndex ? currencyFormat : undefined,
+            alignment: { horizontal: col >= debitColIndex ? 'right' : 'left' }
+          };
+        }
+      }
+      
+      // Add worksheet to workbook
       XLSX.utils.book_append_sheet(wb, ws, 'Trial Balance');
-      XLSX.writeFile(wb, 'trial_balance.xlsx');
-
+      
+      // Generate filename with date
+      const filename = `Trial_Balance_${format(new Date(selectedDate), 'ddMMyyyy')}.xlsx`;
+      
+      // Save the file
+      XLSX.writeFile(wb, filename);
+      
       toast.success('Exported to Excel successfully');
     } catch (error) {
       console.error('Error exporting to Excel:', error);
@@ -211,80 +372,167 @@ export default function TrialBalance() {
 
   const exportToPDF = () => {
     try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      doc.setFontSize(16);
-      doc.text('Trial Balance', 14, 15);
-      
-      doc.setFontSize(10);
-      doc.text(`As of ${new Date(selectedDate).toLocaleDateString()}`, 14, 25);
-      if (baseCurrency) {
-        doc.text(`Currency: ${baseCurrency.code} - ${baseCurrency.name}`, 14, 30);
-      }
-
-      const headers = [['Sub Category', 'Account Code', 'Account Name', 'Debit', 'Credit']];
-      const data = accounts.map(account => [
-        account.subcategory,
-        account.code,
-        account.name,
-        formatAmount(account.debit),
-        formatAmount(account.credit)
-      ]);
-
-      data.push([
-        '',
-        '',
-        'Total',
-        formatAmount(totals.debit),
-        formatAmount(totals.credit)
-      ]);
-
-      (doc as any).autoTable({
-        startY: 35,
-        head: headers,
-        body: data,
-        theme: 'grid',
-        styles: {
-          fontSize: 8,
-          cellPadding: 2,
-          overflow: 'linebreak',
-          lineWidth: 0.1,
-        },
-        headStyles: {
-          fillColor: [71, 85, 105],
-          fontSize: 8,
-          fontStyle: 'bold',
-          halign: 'left',
-          textColor: [255, 255, 255],
-        },
-        columnStyles: {
-          0: { cellWidth: 40, halign: 'left' },
-          1: { cellWidth: 30, halign: 'left' },
-          2: { cellWidth: 80, halign: 'left' },
-          3: { cellWidth: 30, halign: 'right' },
-          4: { cellWidth: 30, halign: 'right' },
-        },
-        didParseCell: function(data) {
-          const col = data.column.index;
-          if (col >= 3) {
-            data.cell.styles.halign = 'right';
+      // Import html2pdf dynamically
+      import('html2pdf.js').then(async (html2pdf) => {
+        const { generatePrintLogoHTML } = await import('../../lib/printLogo');
+        
+        // Get print logo CSS
+        const printLogoCSS = `
+          .print-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .print-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #4ade80 0%, #10b981 50%, #22c55e 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+          }
+          .print-company-info {
+            display: flex;
+            flex-direction: column;
+          }
+          .print-logo-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000;
+            line-height: 1.2;
+          }
+          .print-logo-subtitle {
+            font-size: 10px;
+            color: #666;
+            line-height: 1.2;
           }
           
-          if (col !== 2) {
-            data.cell.styles.overflow = 'visible';
-            data.cell.styles.cellWidth = 'wrap';
-            data.cell.styles.whiteSpace = 'nowrap';
+          /* Prevent table rows from breaking across pages */
+          tr {
+            page-break-inside: avoid;
           }
-        },
-        margin: { left: 10, right: 10 },
-      });
+          
+          /* Remove page break CSS that might cause issues */
+        `;
+        
+        // Helper function for date formatting
+        const formatDateDDMMYYYY = (date: Date) => {
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        };
+        
+        // Create HTML content for PDF
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; color: #000; background: white; padding: 20px;">
+            <!-- Header Section -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #333;">
+              <div style="flex: 1; display: flex; align-items: center;">
+                ${generatePrintLogoHTML()}
+              </div>
+              <div style="flex: 2; text-align: center;">
+                <div style="font-size: 18px; font-weight: bold; color: #000;">Trial Balance</div>
+              </div>
+              <div style="flex: 1; text-align: right;">
+                <div style="font-size: 10px; color: #666;">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+              </div>
+            </div>
+            
+            <!-- Report Info -->
+            <div style="margin-bottom: 15px; font-size: 12px;">
+              <p style="margin: 3px 0; color: #000;">Report Date: ${formatDateDDMMYYYY(new Date(selectedDate))}</p>
+              <p style="margin: 3px 0; color: #000;">Currency: ${baseCurrency ? `${baseCurrency.code} - ${baseCurrency.name}` : 'N/A'}</p>
+            </div>
+            
+            <!-- Trial Balance Table -->
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin: 0;">
+              <thead>
+                <tr>
+                  <th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Account Code</th>
+                  <th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Account Name</th>
+                  <th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Sub Category</th>
+                  <th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Debit</th>
+                  <th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${accounts.map(account => `
+                  <tr>
+                    <td style="border: 1px solid #333; padding: 6px;">${account.code}</td>
+                    <td style="border: 1px solid #333; padding: 6px;">${account.name}</td>
+                    <td style="border: 1px solid #333; padding: 6px;">${account.subcategory}</td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(account.debit)}</td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(account.credit)}</td>
+                  </tr>
+                `).join('')}
+                <tr style="background-color: #e6f3ff;">
+                  <td colspan="3" style="border: 1px solid #333; padding: 6px; font-weight: bold;">Total</td>
+                  <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.debit)}</td>
+                  <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.credit)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <style>
+            ${printLogoCSS}
+          </style>
+        `;
+        
 
-      doc.save('trial_balance.pdf');
-      toast.success('Exported to PDF successfully');
+        
+        // Configure html2pdf options with page numbering
+        const options = {
+          margin: [0.75, 0.75, 1, 0.75], // top, right, bottom, left
+          filename: `Trial_Balance_${format(new Date(selectedDate), 'ddMMyyyy')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { 
+            unit: 'in', 
+            format: 'a4', 
+            orientation: 'landscape',
+            putOnlyUsedFonts: true,
+            floatPrecision: 16
+          },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        // Generate PDF with custom page numbering
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        
+        html2pdf.default()
+          .set(options)
+          .from(element)
+          .toPdf()
+          .get('pdf')
+          .then((pdf) => {
+            const totalPages = pdf.internal.getNumberOfPages();
+            
+            // Add page numbers to each page
+            for (let i = 1; i <= totalPages; i++) {
+              pdf.setPage(i);
+              pdf.setFontSize(10);
+              pdf.setTextColor(102, 102, 102); // Gray color
+              const pageText = `Page ${i} of ${totalPages}`;
+              const pageWidth = pdf.internal.pageSize.getWidth();
+              const textWidth = pdf.getTextWidth(pageText);
+              pdf.text(pageText, pageWidth - textWidth - 0.75, pdf.internal.pageSize.getHeight() - 0.5);
+            }
+            
+            pdf.save(`Trial_Balance_${format(new Date(selectedDate), 'ddMMyyyy')}.pdf`);
+          });
+        
+        toast.success('PDF exported successfully!');
+      }).catch(error => {
+        console.error('Error loading html2pdf:', error);
+        toast.error('Failed to load PDF library');
+      });
     } catch (error) {
       console.error('Error exporting to PDF:', error);
       toast.error('Failed to export to PDF');
@@ -318,18 +566,7 @@ export default function TrialBalance() {
         <div class="print-running-header">
           <div class="print-header-content">
             <div class="print-left-section">
-              <div class="print-logo-container">
-                <div class="print-logo-icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="2" x2="12" y2="22"></line>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                  </svg>
-                </div>
-                <div class="print-company-info">
-                  <div class="print-logo-title">FinTrack Pro</div>
-                  <div class="print-logo-subtitle">Financial Management</div>
-                </div>
-              </div>
+              ${generatePrintLogoHTML()}
             </div>
             <div class="print-center-section">
               <div class="print-report-title">Trial Balance</div>

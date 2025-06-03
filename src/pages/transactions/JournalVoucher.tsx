@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { formatAmount } from '../../lib/format';
 import DateFilter from '../../components/DateFilter';
 import EditTransactionModal from '../../components/EditTransactionModal';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Account {

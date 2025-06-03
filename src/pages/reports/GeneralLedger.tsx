@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { format, subDays, subMonths, startOfDay, endOfDay, isValid } from 'date-fns';
 import { Download, Printer, FileSpreadsheet, FileText, Calendar, Search, ChevronDown, ChevronUp, Filter } from 'lucide-react';
+import { AppLogo } from '../../components/AppLogo';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { formatAmount } from '../../lib/format';
@@ -11,6 +12,9 @@ import { useResizableColumns } from '../../hooks/useResizableColumns';
 import { ResizableHeader } from '../../components/ResizableHeader';
 import '../../styles/resizable.css';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { generatePrintLogoHTML, printLogoCSS } from '../../lib/printLogo';
+import html2pdf from 'html2pdf.js';
+
 
 interface Account {
   id: string;
@@ -82,6 +86,8 @@ export default function GeneralLedger() {
   const [openingBalance, setOpeningBalance] = useState<OpeningBalance>({ debit: 0, credit: 0, balance: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [totals, setTotals] = useState<{ debit: number; credit: number }>({ debit: 0, credit: 0 });
+  const [isReportGenerated, setIsReportGenerated] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const {
     columnWidths,
     handleResizeStart,
@@ -146,6 +152,7 @@ export default function GeneralLedger() {
   const handleGenerateReport = () => {
     if (selectedAccount) {
       fetchTransactions();
+      setIsReportGenerated(true);
     } else {
       toast.error('Please select an account first');
     }
@@ -155,6 +162,11 @@ export default function GeneralLedger() {
     const filtered = filterAndSortTransactions();
     setFilteredTransactions(filtered);
   }, [searchText, searchColumn, transactions, sortColumn, sortDirection, columnFilters]);
+
+  // Reset report generated state when account or date range changes
+  useEffect(() => {
+    setIsReportGenerated(false);
+  }, [selectedAccount, dateRange, customStartDate, customEndDate]);
 
   const loadAccounts = async () => {
     try {
@@ -193,6 +205,32 @@ export default function GeneralLedger() {
   const getCurrencyCode = (currencyId: string): string => {
     const currency = currencies.find(c => c.id === currencyId);
     return currency?.code || '';
+  };
+
+  const checkReportGenerated = () => {
+    if (!isReportGenerated) {
+      setShowErrorModal(true);
+      return false;
+    }
+    return true;
+  };
+
+  const handlePrintWithCheck = () => {
+    if (checkReportGenerated()) {
+      handlePrint();
+    }
+  };
+
+  const handleExcelWithCheck = () => {
+    if (checkReportGenerated()) {
+      exportToExcel();
+    }
+  };
+
+  const handlePDFWithCheck = () => {
+    if (checkReportGenerated()) {
+      exportToPDF();
+    }
   };
 
   const getDateRange = () => {
@@ -499,51 +537,254 @@ export default function GeneralLedger() {
 
   const exportToExcel = () => {
     try {
+      // Get the correct date range
+      const currentDateRange = getDateRange();
+      
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      
+      // Helper function to parse date from dd/MM/yyyy format
+      const parseExcelDate = (dateStr: string) => {
+        const [day, month, year] = dateStr.split('/');
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      };
+      
+      // Prepare header information with logo placeholder
+      const headerData = [
+        ['🏢 FinTrack Pro - Financial Management System'], // Added emoji as logo placeholder
+        ['General Ledger Report'],
+        [''],
+        [`Account: ${selectedAccount ? (accounts.find(a => a.id === selectedAccount)?.code + ' - ' + accounts.find(a => a.id === selectedAccount)?.name) || 'All Accounts' : 'All Accounts'}`],
+        [`Period: ${format(currentDateRange.start, 'dd/MM/yyyy')} to ${format(currentDateRange.end, 'dd/MM/yyyy')}`],
+        [`Print Date & Time: ${getCurrentDateTimeFormatted()}`],
+        [''],
+        [''] // Extra space before table
+      ];
+      
+      // Prepare table headers
+      const tableHeaders = displayMode === 'document' 
+        ? ['Date', 'Type', 'Description', 'Currency', 'Rate', 'Doc Amount', 'Debit', 'Credit', 'Balance']
+        : ['Date', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
+      
       // Prepare data for export including opening balance
       const exportData = [];
       
-      // Add opening balance row
-      exportData.push({
-        Date: 'Opening Balance',
-        'Transaction Type': '',
-        Description: '',
-        ...(displayMode === 'document' ? {
-          Currency: '',
-          'Exchange Rate': '',
-          'Doc. Amount': '',
-        } : {}),
-        Debit: openingBalance.balance > 0 ? formatAmount(openingBalance.balance) : '',
-        Credit: openingBalance.balance < 0 ? formatAmount(Math.abs(openingBalance.balance)) : '',
-        Balance: formatAmount(openingBalance.balance)
-      });
+      // Add opening balance row with proper number formatting
+      const openingBalanceRow = displayMode === 'document'
+        ? [
+            'Opening Balance', '', '', '', '', '',
+            openingBalance.balance > 0 ? openingBalance.balance : 0,
+            openingBalance.balance < 0 ? Math.abs(openingBalance.balance) : 0,
+            openingBalance.balance
+          ]
+        : [
+            'Opening Balance', '', '',
+            openingBalance.balance > 0 ? openingBalance.balance : 0,
+            openingBalance.balance < 0 ? Math.abs(openingBalance.balance) : 0,
+            openingBalance.balance
+          ];
       
-      // Add transaction rows
+      exportData.push(openingBalanceRow);
+      
+      // Add transaction rows with proper data types
       filteredTransactions.forEach(t => {
-        const baseData = {
-          Date: t.date,
-          'Transaction Type': t.transaction_type,
-          Description: t.narration,
-          Debit: t.debit > 0 ? formatAmount(t.debit) : '',
-          Credit: t.credit > 0 ? formatAmount(t.credit) : '',
-          Balance: formatAmount(t.running_balance)
-        };
-
         if (displayMode === 'document') {
-          exportData.push({
-            ...baseData,
-            Currency: t.currency_code,
-            'Exchange Rate': t.exchange_rate.toFixed(4),
-            'Doc. Amount': formatAmount(t.document_currency_amount),
-          });
+          exportData.push([
+            parseExcelDate(t.date), // Convert to Date object
+            t.transaction_type,
+            t.narration,
+            t.currency_code,
+            t.exchange_rate, // Keep as number
+            t.document_currency_amount, // Keep as number
+            t.debit, // Keep as number
+            t.credit, // Keep as number
+            t.running_balance // Keep as number
+          ]);
         } else {
-          exportData.push(baseData);
+          exportData.push([
+            parseExcelDate(t.date), // Convert to Date object
+            t.transaction_type,
+            t.narration,
+            t.debit, // Keep as number
+            t.credit, // Keep as number
+            t.running_balance // Keep as number
+          ]);
         }
       });
-
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
+      
+      // Add totals row with proper number formatting
+      const totalsRow = displayMode === 'document'
+        ? [
+            'Total / Closing Balance', '', '', '', '', '',
+            totals.debit,
+            totals.credit,
+            totals.debit - totals.credit
+          ]
+        : [
+            'Total / Closing Balance', '', '',
+            totals.debit,
+            totals.credit,
+            totals.debit - totals.credit
+          ];
+      
+      exportData.push(totalsRow);
+      
+      // Combine all data
+      const allData = [
+        ...headerData,
+        tableHeaders,
+        ...exportData
+      ];
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+      
+      // Set column widths
+      const colWidths = displayMode === 'document'
+        ? [{ wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }]
+        : [{ wch: 12 }, { wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
+      
+      ws['!cols'] = colWidths;
+      
+      // Style the header rows
+      const headerRowCount = headerData.length;
+      const tableHeaderRow = headerRowCount;
+      const openingBalanceRowIndex = headerRowCount + 1;
+      const totalsRowIndex = headerRowCount + 1 + exportData.length - 1;
+      
+      // Apply styles to specific cells
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      
+      // Style company name (first row) - LEFT ALIGNED
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 16 },
+          alignment: { horizontal: 'left' } // Changed from center to left
+        };
+      }
+      
+      // Style report title (second row) - LEFT ALIGNED
+      if (ws['A2']) {
+        ws['A2'].s = {
+          font: { bold: true, sz: 14 },
+          alignment: { horizontal: 'left' } // Changed from center to left
+        };
+      }
+      
+      // Style table headers
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRow, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'F0F0F0' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            }
+          };
+        }
+      }
+      
+      // Define number format for currency
+      const currencyFormat = '#,##0.00';
+      const dateFormat = 'dd/mm/yyyy';
+      
+      // Get column indices for different data types
+      const dateColIndex = 0;
+      const debitColIndex = displayMode === 'document' ? 6 : 3;
+      const creditColIndex = displayMode === 'document' ? 7 : 4;
+      const balanceColIndex = displayMode === 'document' ? 8 : 5;
+      const rateColIndex = displayMode === 'document' ? 4 : -1;
+      const docAmountColIndex = displayMode === 'document' ? 5 : -1;
+      
+      // Style opening balance row with number formatting
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: openingBalanceRowIndex, c: col });
+        if (ws[cellAddress]) {
+          const baseStyle = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'F9F9F9' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            }
+          };
+          
+          // Add number formatting for financial columns
+          if (col === debitColIndex || col === creditColIndex || col === balanceColIndex || 
+              (displayMode === 'document' && (col === rateColIndex || col === docAmountColIndex))) {
+            ws[cellAddress].s = { ...baseStyle, numFmt: currencyFormat };
+          } else {
+            ws[cellAddress].s = baseStyle;
+          }
+        }
+      }
+      
+      // Style totals row with number formatting
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: totalsRowIndex, c: col });
+        if (ws[cellAddress]) {
+          const baseStyle = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E6F3FF' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            }
+          };
+          
+          // Add number formatting for financial columns
+          if (col === debitColIndex || col === creditColIndex || col === balanceColIndex || 
+              (displayMode === 'document' && (col === rateColIndex || col === docAmountColIndex))) {
+            ws[cellAddress].s = { ...baseStyle, numFmt: currencyFormat };
+          } else {
+            ws[cellAddress].s = baseStyle;
+          }
+        }
+      }
+      
+      // Add borders and formatting to all data cells
+      for (let row = tableHeaderRow + 1; row < totalsRowIndex; row++) {
+        for (let col = 0; col <= range.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          if (ws[cellAddress]) {
+            const baseStyle = {
+              border: {
+                top: { style: 'thin' },
+                bottom: { style: 'thin' },
+                left: { style: 'thin' },
+                right: { style: 'thin' }
+              }
+            };
+            
+            // Add specific formatting based on column type
+            if (col === dateColIndex) {
+              // Date formatting
+              ws[cellAddress].s = { ...baseStyle, numFmt: dateFormat };
+            } else if (col === debitColIndex || col === creditColIndex || col === balanceColIndex || 
+                      (displayMode === 'document' && (col === rateColIndex || col === docAmountColIndex))) {
+              // Number formatting for financial columns
+              ws[cellAddress].s = { ...baseStyle, numFmt: currencyFormat };
+            } else {
+              // Default formatting for text columns
+              ws[cellAddress].s = baseStyle;
+            }
+          }
+        }
+      }
+      
+      // Generate filename with account and date range
+      const filename = `General_Ledger_${selectedAccount ? accounts.find(a => a.id === selectedAccount)?.code || 'All' : 'All'}_${format(currentDateRange.start, 'ddMMyyyy')}_${format(currentDateRange.end, 'ddMMyyyy')}.xlsx`;
+      
       XLSX.utils.book_append_sheet(wb, ws, 'General Ledger');
-      XLSX.writeFile(wb, 'general_ledger.xlsx');
+      XLSX.writeFile(wb, filename);
 
       toast.success('Report exported to Excel successfully');
     } catch (error) {
@@ -552,108 +793,461 @@ export default function GeneralLedger() {
     }
   };
 
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      doc.setFontSize(16);
-      doc.text('General Ledger Report', 14, 15);
-
-      doc.setFontSize(10);
-      const selectedAccountData = accounts.find(a => a.id === selectedAccount);
-      if (selectedAccountData) {
-        doc.text(`Account: ${selectedAccountData.code} - ${selectedAccountData.name}`, 14, 25);
-      }
-
-      const { start, end } = getDateRange();
-      doc.text(`Period: ${format(start, 'dd/MM/yyyy')} to ${format(end, 'dd/MM/yyyy')}`, 14, 30);
-      doc.text(`Opening Balance: ${formatAmount(openingBalance.balance)}`, 14, 35);
-
-      const columns = displayMode === 'document' 
-        ? ['Date', 'Type', 'Description', 'Currency', 'Rate', 'Doc. Amount', 'Debit', 'Credit', 'Balance']
-        : ['Date', 'Type', 'Description', 'Debit', 'Credit', 'Balance'];
-
-      // Prepare data for PDF including opening balance
-      const data = [];
+      // Get the correct date range
+      const currentDateRange = getDateRange();
       
-      // Add opening balance row
-      data.push([
-        'Opening Balance',
-        '',
-        '',
-        ...(displayMode === 'document' ? ['', '', ''] : []),
-        openingBalance.balance > 0 ? formatAmount(openingBalance.balance) : '',
-        openingBalance.balance < 0 ? formatAmount(Math.abs(openingBalance.balance)) : '',
-        formatAmount(openingBalance.balance)
-      ]);
+      // Create HTML content for PDF
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; color: #000; background: white; padding: 20px;">
+          <!-- Header Section -->
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #333;">
+            <div style="flex: 1; display: flex; align-items: center;">
+              ${generatePrintLogoHTML()}
+            </div>
+            <div style="flex: 2; text-align: center;">
+              <div style="font-size: 18px; font-weight: bold; color: #000;">General Ledger Report</div>
+            </div>
+            <div style="flex: 1; text-align: right;">
+              <div style="font-size: 10px; color: #666;">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+            </div>
+          </div>
+          
+          <!-- Report Info -->
+          <div style="margin-bottom: 15px; font-size: 12px;">
+            <p style="margin: 3px 0; color: #000;">Account: ${selectedAccount ? (accounts.find(a => a.id === selectedAccount)?.code + ' - ' + accounts.find(a => a.id === selectedAccount)?.name) || 'All Accounts' : 'All Accounts'}</p>
+            <p style="margin: 3px 0; color: #000;">Period: ${format(currentDateRange.start, 'dd/MM/yyyy')} to ${format(currentDateRange.end, 'dd/MM/yyyy')}</p>
+          </div>
+          
+          <!-- Transaction Table -->
+          <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin: 0;">
+            <thead>
+              <tr>
+                ${displayMode === 'document' 
+                  ? '<th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Date</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Type</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Description</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Currency</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Rate</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Doc Amount</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Debit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Credit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Balance</th>'
+                  : '<th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Date</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Type</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Description</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Debit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Credit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Balance</th>'
+                }
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background-color: #f9f9f9;">
+                <td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Opening Balance</td>
+                <td style="border: 1px solid #333; padding: 6px;"></td>
+                <td style="border: 1px solid #333; padding: 6px;"></td>
+                ${displayMode === 'document' ? '<td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td>' : ''}
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance.balance > 0 ? formatAmount(openingBalance.balance) : ''}</td>
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance.balance < 0 ? formatAmount(Math.abs(openingBalance.balance)) : ''}</td>
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(openingBalance.balance)}</td>
+              </tr>
+              ${filteredTransactions.map(t => `
+                <tr>
+                  <td style="border: 1px solid #333; padding: 6px;">${t.date}</td>
+                  <td style="border: 1px solid #333; padding: 6px;">${t.transaction_type}</td>
+                  <td style="border: 1px solid #333; padding: 6px;">${t.narration}</td>
+                  ${displayMode === 'document' 
+                    ? `<td style="border: 1px solid #333; padding: 6px;">${t.currency_code}</td><td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(t.exchange_rate)}</td><td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(t.document_currency_amount)}</td>`
+                    : ''
+                  }
+                  <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(t.debit)}</td>
+                  <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(t.credit)}</td>
+                  <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(t.running_balance)}</td>
+                </tr>
+              `).join('')}
+              <tr style="background-color: #e6f3ff;">
+                <td colspan="${displayMode === 'document' ? '6' : '3'}" style="border: 1px solid #333; padding: 6px; font-weight: bold;">Total / Closing Balance</td>
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.debit)}</td>
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.credit)}</td>
+                <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.debit - totals.credit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <style>
+          ${printLogoCSS}
+        </style>
+      `;
       
-      // Add transaction rows
-      filteredTransactions.forEach(t => {
-        const baseData = [
-          t.date,
-          t.transaction_type,
-          t.narration,
-          formatAmount(t.debit),
-          formatAmount(t.credit),
-          formatAmount(t.running_balance)
-        ];
-
-        if (displayMode === 'document') {
-          data.push([
-            t.date,
-            t.transaction_type,
-            t.narration,
-            t.currency_code,
-            t.exchange_rate.toFixed(4),
-            formatAmount(t.document_currency_amount),
-            formatAmount(t.debit),
-            formatAmount(t.credit),
-            formatAmount(t.running_balance)
-          ]);
-        } else {
-          data.push(baseData);
-        }
-      });
-
-      (doc as any).autoTable({
-        startY: 40,
-        head: [columns],
-        body: data,
-        theme: 'grid',
-        styles: {
-          fontSize: 8,
-          cellPadding: 2
+      // Configure html2pdf options
+      const options = {
+        margin: [0.5, 0.75, 0.5, 0.75],
+        filename: `General_Ledger_${selectedAccount ? accounts.find(a => a.id === selectedAccount)?.code || 'All' : 'All'}_${format(currentDateRange.start, 'ddMMyyyy')}_${format(currentDateRange.end, 'ddMMyyyy')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
         },
-        columnStyles: {
-          0: { cellWidth: 20 },
-          1: { cellWidth: displayMode === 'document' ? 25 : 30 },
-          2: { cellWidth: displayMode === 'document' ? 40 : 60 },
-          ...(displayMode === 'document' ? {
-            3: { cellWidth: 15 },
-            4: { cellWidth: 15, halign: 'right' },
-            5: { cellWidth: 20, halign: 'right' },
-            6: { cellWidth: 20, halign: 'right' },
-            7: { cellWidth: 20, halign: 'right' },
-            8: { cellWidth: 20, halign: 'right' }
-          } : {
-            3: { cellWidth: 25, halign: 'right' },
-            4: { cellWidth: 25, halign: 'right' },
-            5: { cellWidth: 25, halign: 'right' }
-          })
+        jsPDF: { 
+          unit: 'in', 
+          format: 'a4', 
+          orientation: 'landscape'
         }
-      });
-
-      doc.save('general_ledger.pdf');
-      toast.success('Report exported to PDF successfully');
+      };
+      
+      // Generate and download PDF
+      await html2pdf().set(options).from(htmlContent).save();
+      
+      toast.success('PDF exported successfully!');
     } catch (error) {
       console.error('Error exporting to PDF:', error);
       toast.error('Failed to export to PDF');
     }
   };
+
+  const formatDateForPrint = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const getCurrentDateTimeFormatted = () => {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
+  const handlePrint = () => {
+    try {
+      // Get the correct date range
+      const currentDateRange = getDateRange();
+      
+      // Create a temporary print container
+      const printContainer = document.createElement('div');
+      printContainer.id = 'print-container';
+      printContainer.innerHTML = `
+        <div class="print-running-header">
+          <div class="print-header-content">
+            <div class="print-left-section">
+              ${generatePrintLogoHTML()}
+            </div>
+            <div class="print-center-section">
+              <div class="print-report-title">General Ledger Report</div>
+            </div>
+            <div class="print-right-section">
+              <div class="print-date">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+            </div>
+          </div>
+        </div>
+        <div class="print-main-content">
+          <div class="print-report-info">
+            <p>Account: ${selectedAccount ? (accounts.find(a => a.id === selectedAccount)?.code + ' - ' + accounts.find(a => a.id === selectedAccount)?.name) || 'All Accounts' : 'All Accounts'}</p>
+            <p>Period: ${format(currentDateRange.start, 'dd/MM/yyyy')} to ${format(currentDateRange.end, 'dd/MM/yyyy')}</p>
+          </div>
+          <table class="print-table">
+            <thead>
+              <tr>
+                ${displayMode === 'document' 
+                  ? '<th>Date</th><th>Type</th><th>Description</th><th>Currency</th><th>Rate</th><th>Doc Amount</th><th class="number">Debit</th><th class="number">Credit</th><th class="number">Balance</th>'
+                  : '<th>Date</th><th>Type</th><th>Description</th><th class="number">Debit</th><th class="number">Credit</th><th class="number">Balance</th>'
+                }
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="opening-balance-row">
+                <td>Opening Balance</td>
+                <td></td>
+                <td></td>
+                ${displayMode === 'document' ? '<td></td><td></td><td></td>' : ''}
+                <td class="number">${openingBalance.balance > 0 ? formatAmount(openingBalance.balance) : ''}</td>
+                <td class="number">${openingBalance.balance < 0 ? formatAmount(Math.abs(openingBalance.balance)) : ''}</td>
+                <td class="number">${formatAmount(openingBalance.balance)}</td>
+              </tr>
+              ${filteredTransactions.map(t => `
+                <tr>
+                  <td>${t.date}</td>
+                  <td>${t.transaction_type}</td>
+                  <td>${t.narration}</td>
+                  ${displayMode === 'document' 
+                    ? `<td>${t.currency_code}</td><td class="number">${formatAmount(t.exchange_rate)}</td><td class="number">${formatAmount(t.document_currency_amount)}</td>`
+                    : ''
+                  }
+                  <td class="number">${formatAmount(t.debit)}</td>
+                  <td class="number">${formatAmount(t.credit)}</td>
+                  <td class="number">${formatAmount(t.running_balance)}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="${displayMode === 'document' ? '6' : '3'}"><strong>Total / Closing Balance</strong></td>
+                <td class="number"><strong>${formatAmount(totals.debit)}</strong></td>
+                <td class="number"><strong>${formatAmount(totals.credit)}</strong></td>
+                <td class="number"><strong>${formatAmount(totals.debit - totals.credit)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+      
+      // Add print styles
+      const printStyles = document.createElement('style');
+      printStyles.id = 'print-styles';
+      printStyles.innerHTML = `
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          /* Define the page layout with running header */
+          @page {
+            size: A4 landscape;
+            margin: 0.5in 0.75in 0.5in 0.75in; /* Reduced top margin for header */
+            
+            /* Explicitly remove browser default headers/footers */
+            @top-left { content: none !important; }
+            @top-center { content: none !important; }
+            @top-right { content: none !important; }
+            @bottom-left { content: none !important; }
+            @bottom-center { content: none !important; }
+            @bottom-right { content: none !important; }
+            
+            /* Define custom running header */
+            @top {
+              content: element(pageHeader);
+            }
+          }
+          
+          /* Hide everything except print container */
+          html, body {
+            width: 100%;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            overflow: visible !important;
+          }
+          
+          body {
+            background: white !important;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+          }
+          
+          body > *:not(#print-container) { 
+            display: none !important; 
+          }
+          
+          /* Main print container */
+          #print-container {
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            font-family: Arial, sans-serif;
+            color: #000 !important;
+            background: white !important;
+            overflow: visible;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+          }
+          
+          /* Running header that repeats on every page */
+          .print-running-header {
+            position: running(pageHeader) !important;
+            width: 100% !important;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #333 !important;
+            margin-bottom: 20px;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          .print-header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .print-left-section {
+            display: flex;
+            align-items: center;
+            flex: 1;
+          }
+          .print-center-section {
+            flex: 1;
+            text-align: center;
+          }
+          .print-right-section {
+            flex: 1;
+            text-align: right;
+          }
+          .print-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .print-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #22c55e 0%, #10b981 50%, #22c55e 100%) !important;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-print-color-adjust: exact !important;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+            border: 1px solid rgba(34, 197, 94, 0.2) !important;
+          }
+          .print-logo-icon svg {
+            color: white !important;
+            stroke: white !important;
+            fill: none !important;
+            font-weight: bold;
+          }
+          .print-company-info {
+            display: flex;
+            flex-direction: column;
+          }
+          .print-logo-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-logo-subtitle {
+            font-size: 8px;
+            color: #666 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-date {
+            font-size: 9px;
+            color: #666 !important;
+            margin: 0;
+          }
+          .print-report-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+          }
+          .print-report-info {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #000 !important;
+          }
+          .print-report-info p {
+            margin: 2px 0;
+            color: #000 !important;
+          }
+          /* Main content area that starts after the header */
+          .print-main-content {
+            margin-top: 0.2in; /* Reduced space after the running header */
+            padding-top: 0;
+            width: 100%;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+            background: white !important;
+            page-break-inside: auto;
+            table-layout: fixed;
+            border-spacing: 0;
+          }
+          .print-table thead {
+            display: table-header-group !important;
+            background: white !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            position: static !important;
+          }
+          .print-table thead tr {
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-inside: avoid !important;
+            background: white !important;
+            display: table-row !important;
+          }
+          .print-table th {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background-color: #f5f5f5 !important;
+            font-weight: bold;
+            -webkit-print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table tbody {
+            display: table-row-group !important;
+            background: white !important;
+            page-break-after: auto;
+          }
+          .print-table td {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background: white !important;
+            page-break-inside: avoid;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table .number {
+            text-align: right;
+          }
+          .print-table .total-row {
+            font-weight: bold;
+            background-color: #f9f9f9 !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table .opening-balance-row {
+            font-weight: bold;
+            background-color: #f0f9ff !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table tr {
+            page-break-inside: avoid;
+            background: white !important;
+          }
+          .print-table tbody {
+            background: white !important;
+          }
+        }
+      `;
+      
+      // Add styles to document head
+      document.head.appendChild(printStyles);
+      
+      // Add print container to body
+      document.body.appendChild(printContainer);
+      
+      // Trigger print
+      window.print();
+      
+      // Clean up after printing
+      setTimeout(() => {
+        document.body.removeChild(printContainer);
+        document.head.removeChild(printStyles);
+      }, 1000);
+      
+      toast.success('Print dialog opened successfully');
+    } catch (error) {
+      console.error('Error printing report:', error);
+      toast.error('Failed to open print preview');
+    }
+  };
+
+
 
   if (error) {
     return (
@@ -675,15 +1269,37 @@ export default function GeneralLedger() {
         <h1 className="text-2xl font-semibold">General Ledger</h1>
         <div className="flex gap-2">
           <button
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            onClick={handlePrintWithCheck}
+            disabled={!isReportGenerated}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              isReportGenerated
+                ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-blue-800 hover:border-blue-900'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed border-gray-500'
+            }`}
+          >
+            <Printer className="w-4 h-4" />
+            Print
+          </button>
+          <button
+            onClick={handleExcelWithCheck}
+            disabled={!isReportGenerated}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              isReportGenerated
+                ? 'bg-green-600 text-white hover:bg-green-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-green-800 hover:border-green-900'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed border-gray-500'
+            }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </button>
           <button
-            onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            onClick={handlePDFWithCheck}
+            disabled={!isReportGenerated}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              isReportGenerated
+                ? 'bg-red-600 text-white hover:bg-red-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-red-800 hover:border-red-900'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed border-gray-500'
+            }`}
           >
             <FileText className="w-4 h-4" />
             PDF
@@ -796,7 +1412,7 @@ export default function GeneralLedger() {
               <button
                 onClick={handleGenerateReport}
                 disabled={!selectedAccount}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2"
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transform transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-b-4 border-blue-800 hover:border-blue-900 disabled:transform-none disabled:shadow-none disabled:border-b-4 disabled:border-gray-500 flex items-center justify-center gap-2"
               >
                 <Filter className="w-4 h-4" />
                  Generate
@@ -1062,6 +1678,45 @@ export default function GeneralLedger() {
           </div>
         </div>
       </div>
+
+      {/* Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Report Not Generated</h3>
+                <p className="text-gray-600 dark:text-gray-300 mt-1">Please generate the report first before trying to print, export to Excel, or export to PDF.</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setShowErrorModal(false);
+                  if (selectedAccount) {
+                    handleGenerateReport();
+                  }
+                }}
+                disabled={!selectedAccount}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                Generate Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

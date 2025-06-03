@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, X, FileSpreadsheet, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface Account {

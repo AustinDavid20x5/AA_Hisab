@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, subDays, subMonths, startOfDay, endOfDay } from 'date-fns';
 import { FileText } from 'lucide-react';
+import { AppLogo } from '../../components/AppLogo';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
@@ -304,19 +305,48 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
         format: 'a4'
       });
 
+      // Add app logo (matching Layout.tsx gradient design)
+      // Create gradient effect with multiple rectangles
+      doc.setFillColor(74, 222, 128); // green-400
+      doc.roundedRect(14, 8, 12, 12, 3, 3, 'F');
+      doc.setFillColor(16, 185, 129); // emerald-500 overlay
+      doc.roundedRect(14.5, 8.5, 11, 11, 2.5, 2.5, 'F');
+      doc.setFillColor(34, 197, 94); // green-600 center
+      doc.roundedRect(15, 9, 10, 10, 2, 2, 'F');
+      
+      // Add dollar sign
+      doc.setTextColor(255, 255, 255); // White text
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('$', 18.5, 16);
+      
+      // Reset text color to black
+      doc.setTextColor(0, 0, 0);
+      
+      // Add app name and header
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FinTrack Pro', 30, 14);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Financial Management System', 30, 19);
+      
       // Add title and header info
       doc.setFontSize(16);
-      doc.text('Cash Book Report', 14, 15);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Cash Book Report', 14, 30);
 
       doc.setFontSize(10);
-      doc.text(`Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}`, 14, 25);
-      doc.text(`Currency: ${selectedCashBook.currency.code}`, 14, 30);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}`, 14, 38);
+      doc.text(`Currency: ${selectedCashBook.currency.code}`, 14, 43);
 
       const { start, end } = getDateRange();
-      doc.text(`Period: ${format(start, 'dd/MM/yyyy')} to ${format(end, 'dd/MM/yyyy')}`, 14, 35);
+      doc.text(`Period: ${format(start, 'dd/MM/yyyy')} to ${format(end, 'dd/MM/yyyy')}`, 14, 48);
 
       // Show opening balances
-      let yPos = 40;
+      let yPos = 53;
       openingBalance.forEach((balance) => {
         doc.text(`Opening Balance (${balance.currency_code}): ${formatAmount(balance.balance)}`, 14, yPos);
         yPos += 5;
