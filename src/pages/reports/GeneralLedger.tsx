@@ -326,9 +326,8 @@ export default function GeneralLedger() {
 
       if (transactionError) throw transactionError;
 
-      let runningBalance = openingBalanceAmount;
-      let runningBalanceDoc = 0;
-      const formattedTransactions = transactionData
+      // First map transactions to our format without calculating running balance
+      const mappedTransactions = transactionData
         .map(transaction => {
           const header = headerData.find(h => h.id === transaction.header_id);
           if (!header) return null;
@@ -338,11 +337,9 @@ export default function GeneralLedger() {
           const debit_doc = Number(transaction.debit_doc_currency) || 0;
           const credit_doc = Number(transaction.credit_doc_currency) || 0;
           
-          runningBalance += debit - credit;
-          runningBalanceDoc += debit_doc - credit_doc;
-
           return {
             date: format(new Date(header.transaction_date), 'dd/MM/yyyy'),
+            rawDate: new Date(header.transaction_date), // Store raw date for sorting
             transaction_type: header.tbl_trans_type.description,
             narration: transaction.description || header.description,
             document_currency_amount: debit_doc > 0 ? debit_doc : -credit_doc,
@@ -352,29 +349,49 @@ export default function GeneralLedger() {
             credit,
             debit_doc_currency: debit_doc,
             credit_doc_currency: credit_doc,
-            running_balance: runningBalance,
-            running_balance_doc: runningBalanceDoc
+            running_balance: 0, // Will be calculated after sorting
+            running_balance_doc: 0 // Will be calculated after sorting
           };
         })
-        .filter((t): t is Transaction => t !== null)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        .filter((t): t is (Transaction & { rawDate: Date }) => t !== null);
 
-        // Calculate totals including opening balance
-    const transactionTotals = formattedTransactions.reduce(
-      (acc, t) => ({
-        debit: acc.debit + t.debit,
-        credit: acc.credit + t.credit
-      }),
-      { debit: 0, credit: 0 }
-    );
-    
-    // Add opening balance to totals
-    const newTotals = {
-      debit: transactionTotals.debit + (openingBalanceAmount > 0 ? openingBalanceAmount : 0),
-      credit: transactionTotals.credit + (openingBalanceAmount < 0 ? Math.abs(openingBalanceAmount) : 0)
-    };
+      // Sort by date first using the raw Date object
+      mappedTransactions.sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+      
+      // Now calculate running balances on the sorted data
+      let runningBalance = openingBalanceAmount;
+      let runningBalanceDoc = 0;
+      
+      const formattedTransactions = mappedTransactions.map(t => {
+        runningBalance += t.debit - t.credit;
+        runningBalanceDoc += t.debit_doc_currency - t.credit_doc_currency;
+        
+        return {
+          ...t,
+          running_balance: runningBalance,
+          running_balance_doc: runningBalanceDoc
+        };
+      });
 
-      setTransactions(formattedTransactions);
+      // Remove the temporary rawDate property
+      const finalTransactions = formattedTransactions.map(({ rawDate, ...rest }) => rest);
+
+      // Calculate totals including opening balance
+      const transactionTotals = finalTransactions.reduce(
+        (acc, t) => ({
+          debit: acc.debit + t.debit,
+          credit: acc.credit + t.credit
+        }),
+        { debit: 0, credit: 0 }
+      );
+      
+      // Add opening balance to totals
+      const newTotals = {
+        debit: transactionTotals.debit + (openingBalanceAmount > 0 ? openingBalanceAmount : 0),
+        credit: transactionTotals.credit + (openingBalanceAmount < 0 ? Math.abs(openingBalanceAmount) : 0)
+      };
+
+      setTransactions(finalTransactions);
       setTotals(newTotals); // Update totals state
     } catch (error) {
       console.error('Error fetching transactions:', error);
