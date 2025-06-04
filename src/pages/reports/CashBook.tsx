@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { format, subDays, subMonths, startOfDay, endOfDay } from 'date-fns';
-import { FileText } from 'lucide-react';
+import { FileText, Printer, FileSpreadsheet } from 'lucide-react';
 import { AppLogo } from '../../components/AppLogo';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import * as XLSX from 'xlsx-js-style';
 import { formatAmount } from '../../lib/format';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { generatePrintLogoHTML } from '../../lib/printLogo';
 
 interface CashBook {
   id: string;
@@ -299,157 +301,889 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
         return;
       }
 
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
+      // Import html2pdf dynamically
+      import('html2pdf.js').then(async (html2pdf) => {
+        const { generatePrintLogoHTML } = await import('../../lib/printLogo');
+        
+        const { start, end } = getDateRange();
+        const isBase = selectedCashBook.currency.is_base;
+        
+        // Get print logo CSS
+        const printLogoCSS = `
+          .print-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .print-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #4ade80 0%, #10b981 50%, #22c55e 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+          }
+          .print-company-info {
+            display: flex;
+            flex-direction: column;
+          }
+          .print-logo-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000;
+            line-height: 1.2;
+          }
+          .print-logo-subtitle {
+            font-size: 10px;
+            color: #666;
+            line-height: 1.2;
+          }
+          
+          /* Prevent table rows from breaking across pages */
+          tr {
+            page-break-inside: avoid;
+          }
+        `;
+        
+        // Helper function for date formatting
+        const formatDateDDMMYYYY = (date: Date) => {
+          const day = date.getDate().toString().padStart(2, '0');
+          const month = (date.getMonth() + 1).toString().padStart(2, '0');
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        };
+        
+        const getCurrentDateTimeFormatted = () => {
+          const now = new Date();
+          const day = now.getDate().toString().padStart(2, '0');
+          const month = (now.getMonth() + 1).toString().padStart(2, '0');
+          const year = now.getFullYear();
+          const hours = now.getHours().toString().padStart(2, '0');
+          const minutes = now.getMinutes().toString().padStart(2, '0');
+          return `${day}/${month}/${year} ${hours}:${minutes}`;
+        };
+
+        // Create HTML content for PDF
+        const htmlContent = `
+          <div style="font-family: Arial, sans-serif; color: #000; background: white; padding: 20px;">
+            <!-- Header Section -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #333;">
+              <div style="flex: 1; display: flex; align-items: center;">
+                ${generatePrintLogoHTML()}
+              </div>
+              <div style="flex: 2; text-align: center;">
+                <div style="font-size: 18px; font-weight: bold; color: #000;">Cash Book Report</div>
+              </div>
+              <div style="flex: 1; text-align: right;">
+                <div style="font-size: 10px; color: #666;">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+              </div>
+            </div>
+            
+            <!-- Report Info -->
+            <div style="margin-bottom: 15px; font-size: 12px;">
+              <p style="margin: 3px 0; color: #000;">Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}</p>
+              <p style="margin: 3px 0; color: #000;">Currency: ${selectedCashBook.currency.code}</p>
+              <p style="margin: 3px 0; color: #000;">Period: ${formatDateDDMMYYYY(start)} to ${formatDateDDMMYYYY(end)}</p>
+            </div>
+            
+            <!-- Cash Book Table -->
+            <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin: 0;">
+              <thead>
+                <tr>
+                  ${isBase 
+                    ? '<th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Date</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Narration</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Debit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Credit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Balance</th>'
+                    : '<th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Date</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Narration</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Doc. Amount</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Currency</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Rate</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Debit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Credit</th><th style="border: 1px solid #333; padding: 6px; text-align: center; background-color: #f0f0f0; font-weight: bold;">Balance</th>'
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background-color: #fff3e0;">
+                  ${isBase
+                    ? `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Opening Balance</td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : ''}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : ''}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(openingBalance[0]?.balance || 0)}</td>`
+                    : `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Opening Balance</td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : ''}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : ''}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(openingBalance[0]?.balance || 0)}</td>`
+                  }
+                </tr>
+                ${transactions.map(transaction => `
+                  <tr>
+                    ${isBase
+                      ? `<td style="border: 1px solid #333; padding: 6px;">${transaction.date}</td>
+                         <td style="border: 1px solid #333; padding: 6px;">${transaction.narration}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.debit)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.credit)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.balance)}</td>`
+                      : `<td style="border: 1px solid #333; padding: 6px;">${transaction.date}</td>
+                         <td style="border: 1px solid #333; padding: 6px;">${transaction.narration}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.document_amount)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: center;">${transaction.currency_code}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${transaction.exchange_rate.toFixed(4)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.debit)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.credit)}</td>
+                         <td style="border: 1px solid #333; padding: 6px; text-align: right;">${formatAmount(transaction.balance)}</td>`
+                    }
+                  </tr>
+                `).join('')}
+                <tr style="background-color: #e6f3ff;">
+                  ${isBase
+                    ? `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Totals</td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.debit)}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.credit)}</td>
+                       <td style="border: 1px solid #333; padding: 6px;"></td>`
+                    : `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Totals</td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.docAmount)}</td>
+                       <td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.debit)}</td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(totals.credit)}</td>
+                       <td style="border: 1px solid #333; padding: 6px;"></td>`
+                  }
+                </tr>
+                <tr style="background-color: #e8f5e8;">
+                  ${isBase
+                    ? `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Closing Balance</td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(closingBalance[0]?.balance || 0)}</td>`
+                    : `<td style="border: 1px solid #333; padding: 6px; font-weight: bold;">Closing Balance</td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td><td style="border: 1px solid #333; padding: 6px;"></td>
+                       <td style="border: 1px solid #333; padding: 6px; text-align: right; font-weight: bold;">${formatAmount(closingBalance[0]?.balance || 0)}</td>`
+                  }
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <style>
+            ${printLogoCSS}
+          </style>
+        `;
+
+        // Configure html2pdf options
+        const options = {
+          margin: [0.75, 0.75, 1, 0.75], // top, right, bottom, left
+          filename: `Cash_Book_Report_${selectedCashBook.code}_${format(start, 'ddMMyyyy')}_to_${format(end, 'ddMMyyyy')}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { 
+            unit: 'in', 
+            format: 'a4', 
+            orientation: 'landscape',
+            putOnlyUsedFonts: true,
+            floatPrecision: 16
+          },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+        
+        // Generate PDF with custom page numbering
+        const element = document.createElement('div');
+        element.innerHTML = htmlContent;
+        
+        html2pdf.default()
+          .set(options)
+          .from(element)
+          .toPdf()
+          .get('pdf')
+          .then((pdf) => {
+            const totalPages = pdf.internal.getNumberOfPages();
+            
+            // Add page numbers to each page
+            for (let i = 1; i <= totalPages; i++) {
+              pdf.setPage(i);
+              pdf.setFontSize(10);
+              pdf.setTextColor(102, 102, 102); // Gray color
+              const pageText = `Page ${i} of ${totalPages}`;
+              const pageWidth = pdf.internal.pageSize.getWidth();
+              const textWidth = pdf.getTextWidth(pageText);
+              pdf.text(pageText, pageWidth - textWidth - 0.75, pdf.internal.pageSize.getHeight() - 0.5);
+            }
+            
+            pdf.save(`Cash_Book_Report_${selectedCashBook.code}_${format(start, 'ddMMyyyy')}_to_${format(end, 'ddMMyyyy')}.pdf`);
+          });
+        
+        toast.success('PDF exported successfully!');
+      }).catch(error => {
+        console.error('Error loading html2pdf:', error);
+        toast.error('Failed to load PDF library');
       });
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      toast.error('Failed to export to PDF');
+    }
+  };
 
-      // Add app logo (matching Layout.tsx gradient design)
-      // Create gradient effect with multiple rectangles
-      doc.setFillColor(74, 222, 128); // green-400
-      doc.roundedRect(14, 8, 12, 12, 3, 3, 'F');
-      doc.setFillColor(16, 185, 129); // emerald-500 overlay
-      doc.roundedRect(14.5, 8.5, 11, 11, 2.5, 2.5, 'F');
-      doc.setFillColor(34, 197, 94); // green-600 center
-      doc.roundedRect(15, 9, 10, 10, 2, 2, 'F');
-      
-      // Add dollar sign
-      doc.setTextColor(255, 255, 255); // White text
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('$', 18.5, 16);
-      
-      // Reset text color to black
-      doc.setTextColor(0, 0, 0);
-      
-      // Add app name and header
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'bold');
-      doc.text('FinTrack Pro', 30, 14);
-      
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Financial Management System', 30, 19);
-      
-      // Add title and header info
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Cash Book Report', 14, 30);
+  const formatDateForPrint = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}`, 14, 38);
-      doc.text(`Currency: ${selectedCashBook.currency.code}`, 14, 43);
+  const getCurrentDateTimeFormatted = () => {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
+  const handlePrint = () => {
+    try {
+      if (!selectedCashBook || transactions.length === 0) {
+        toast.error('No data to print');
+        return;
+      }
 
       const { start, end } = getDateRange();
-      doc.text(`Period: ${format(start, 'dd/MM/yyyy')} to ${format(end, 'dd/MM/yyyy')}`, 14, 48);
-
-      // Show opening balances
-      let yPos = 53;
-      openingBalance.forEach((balance) => {
-        doc.text(`Opening Balance (${balance.currency_code}): ${formatAmount(balance.balance)}`, 14, yPos);
-        yPos += 5;
-      });
-
-      // Define columns based on currency
       const isBase = selectedCashBook.currency.is_base;
-      const columns = isBase
+      
+      // Create a temporary print container
+      const printContainer = document.createElement('div');
+      printContainer.id = 'print-container';
+      printContainer.innerHTML = `
+        <div class="print-running-header">
+          <div class="print-header-content">
+            <div class="print-left-section">
+              ${generatePrintLogoHTML()}
+            </div>
+            <div class="print-center-section">
+              <div class="print-report-title">Cash Book Report</div>
+            </div>
+            <div class="print-right-section">
+              <div class="print-date">Print Date & Time: ${getCurrentDateTimeFormatted()}</div>
+            </div>
+          </div>
+        </div>
+        <div class="print-main-content">
+          <div class="print-report-info">
+            <p>Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}</p>
+            <p>Currency: ${selectedCashBook.currency.code}</p>
+            <p>Period: ${formatDateForPrint(format(start, 'yyyy-MM-dd'))} to ${formatDateForPrint(format(end, 'yyyy-MM-dd'))}</p>
+          </div>
+          <table class="print-table">
+            <thead>
+              <tr>
+                ${isBase 
+                  ? '<th>Date</th><th>Narration</th><th class="number">Debit</th><th class="number">Credit</th><th class="number">Balance</th>'
+                  : '<th>Date</th><th>Narration</th><th class="number">Doc. Amount</th><th class="center">Currency</th><th class="number">Rate</th><th class="number">Debit</th><th class="number">Credit</th><th class="number">Balance</th>'
+                }
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="opening-row">
+                ${isBase
+                  ? `<td><strong>Opening Balance</strong></td><td></td>
+                     <td class="number"><strong>${openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : ''}</strong></td>
+                     <td class="number"><strong>${openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : ''}</strong></td>
+                     <td class="number"><strong>${formatAmount(openingBalance[0]?.balance || 0)}</strong></td>`
+                  : `<td><strong>Opening Balance</strong></td><td></td><td class="number"></td><td class="center"></td><td class="number"></td>
+                     <td class="number"><strong>${openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : ''}</strong></td>
+                     <td class="number"><strong>${openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : ''}</strong></td>
+                     <td class="number"><strong>${formatAmount(openingBalance[0]?.balance || 0)}</strong></td>`
+                }
+              </tr>
+              ${transactions.map(transaction => `
+                <tr>
+                  ${isBase
+                    ? `<td>${transaction.date}</td>
+                       <td>${transaction.narration}</td>
+                       <td class="number">${formatAmount(transaction.debit)}</td>
+                       <td class="number">${formatAmount(transaction.credit)}</td>
+                       <td class="number">${formatAmount(transaction.balance)}</td>`
+                    : `<td>${transaction.date}</td>
+                       <td>${transaction.narration}</td>
+                       <td class="number">${formatAmount(transaction.document_amount)}</td>
+                       <td class="center">${transaction.currency_code}</td>
+                       <td class="number">${transaction.exchange_rate.toFixed(4)}</td>
+                       <td class="number">${formatAmount(transaction.debit)}</td>
+                       <td class="number">${formatAmount(transaction.credit)}</td>
+                       <td class="number">${formatAmount(transaction.balance)}</td>`
+                  }
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                ${isBase
+                  ? `<td colspan="2"><strong>Total</strong></td>
+                     <td class="number"><strong>${formatAmount(totals.debit)}</strong></td>
+                     <td class="number"><strong>${formatAmount(totals.credit)}</strong></td>
+                     <td class="number"></td>`
+                  : `<td colspan="2"><strong>Total</strong></td>
+                     <td class="number"><strong>${formatAmount(totals.docAmount)}</strong></td>
+                     <td class="center"></td><td class="number"></td>
+                     <td class="number"><strong>${formatAmount(totals.debit)}</strong></td>
+                     <td class="number"><strong>${formatAmount(totals.credit)}</strong></td>
+                     <td class="number"></td>`
+                }
+              </tr>
+              <tr class="closing-row">
+                ${isBase
+                  ? `<td colspan="2"><strong>Closing Balance</strong></td><td class="number"></td><td class="number"></td>
+                     <td class="number"><strong>${formatAmount(closingBalance[0]?.balance || 0)}</strong></td>`
+                  : `<td colspan="2"><strong>Closing Balance</strong></td><td class="number"></td><td class="center"></td><td class="number"></td><td class="number"></td><td class="number"></td>
+                     <td class="number"><strong>${formatAmount(closingBalance[0]?.balance || 0)}</strong></td>`
+                }
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      // Add print styles
+      const printStyles = document.createElement('style');
+      printStyles.id = 'print-styles';
+      printStyles.innerHTML = `
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          /* Define the page layout with running header */
+          @page {
+            size: A4;
+            margin: 1.5in 0.75in 0.5in 0.75in; /* Extra top margin for header */
+            
+            /* Explicitly remove browser default headers/footers */
+            @top-left { content: none !important; }
+            @top-center { content: none !important; }
+            @top-right { content: none !important; }
+            @bottom-left { content: none !important; }
+            @bottom-center { content: none !important; }
+            @bottom-right { content: none !important; }
+            
+            /* Define custom running header */
+            @top {
+              content: element(pageHeader);
+            }
+          }
+          
+          /* Hide everything except print container */
+          html, body {
+            width: 100%;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            overflow: visible !important;
+          }
+          
+          body {
+            background: white !important;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+          }
+          
+          body > *:not(#print-container) { 
+            display: none !important; 
+          }
+          
+          /* Main print container */
+          #print-container {
+            position: relative !important;
+            width: 100% !important;
+            height: auto !important;
+            font-family: Arial, sans-serif;
+            color: #000 !important;
+            background: white !important;
+            overflow: visible;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+          }
+          
+          /* Running header that repeats on every page */
+          .print-running-header {
+            position: running(pageHeader) !important;
+            width: 100% !important;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #333 !important;
+            margin-bottom: 20px;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          .print-header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .print-left-section {
+            display: flex;
+            align-items: center;
+            flex: 1;
+          }
+          .print-center-section {
+            flex: 1;
+            text-align: center;
+          }
+          .print-right-section {
+            flex: 1;
+            text-align: right;
+          }
+          .print-logo-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+          .print-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #22c55e 0%, #10b981 50%, #22c55e 100%) !important;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-print-color-adjust: exact !important;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+            border: 1px solid rgba(34, 197, 94, 0.2) !important;
+          }
+          .print-logo-icon svg {
+            color: white !important;
+            stroke: white !important;
+            fill: none !important;
+            font-weight: bold;
+          }
+          .print-company-info {
+            display: flex;
+            flex-direction: column;
+          }
+          .print-logo-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-logo-subtitle {
+            font-size: 8px;
+            color: #666 !important;
+            margin: 0;
+            line-height: 1.2;
+          }
+          .print-date {
+            font-size: 9px;
+            color: #666 !important;
+            margin: 0;
+          }
+          .print-report-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #000 !important;
+            margin: 0;
+          }
+          .print-report-info {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #000 !important;
+          }
+          .print-report-info p {
+            margin: 2px 0;
+            color: #000 !important;
+          }
+          /* Main content area that starts after the header */
+          .print-main-content {
+            margin-top: 0.5in; /* Space after the running header */
+            padding-top: 0;
+            width: 100%;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+            background: white !important;
+            page-break-inside: auto;
+            table-layout: fixed;
+            border-spacing: 0;
+          }
+          .print-table thead {
+            display: table-header-group !important;
+            background: white !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-print-color-adjust: exact !important;
+            position: static !important;
+          }
+          .print-table thead tr {
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-inside: avoid !important;
+            background: white !important;
+            display: table-row !important;
+          }
+          .print-table th {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background-color: #f5f5f5 !important;
+            font-weight: bold;
+            -webkit-print-color-adjust: exact !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table tbody {
+            display: table-row-group !important;
+            background: white !important;
+            page-break-after: auto;
+          }
+          .print-table td {
+            border: 1px solid #333 !important;
+            padding: 8px 6px;
+            text-align: left;
+            font-size: 11px;
+            color: #000 !important;
+            background: white !important;
+            page-break-inside: avoid;
+            display: table-cell !important;
+            vertical-align: middle;
+          }
+          .print-table .number {
+            text-align: right;
+          }
+          .print-table .center {
+            text-align: center;
+          }
+          .print-table .total-row {
+            font-weight: bold;
+            background-color: #f9f9f9 !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table .opening-row {
+            font-weight: bold;
+            background-color: #fff3e0 !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table .closing-row {
+            font-weight: bold;
+            background-color: #e8f5e8 !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .print-table tr {
+            page-break-inside: avoid;
+            background: white !important;
+          }
+          .print-table tbody {
+            background: white !important;
+          }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            max-height: none !important;
+          }
+          * {
+            box-sizing: border-box !important;
+          }
+          #print-container {
+            page-break-after: auto;
+          }
+          .print-table tbody {
+            page-break-after: auto;
+          }
+          .print-page-header {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+          }
+          .print-report-info {
+            page-break-after: avoid;
+            page-break-inside: avoid;
+            margin-bottom: 10px;
+          }
+          .print-table {
+            page-break-before: avoid;
+          }
+          .print-table tbody tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          .print-table .total-row {
+            page-break-before: avoid;
+            page-break-after: auto;
+          }
+        }
+      `;
+
+      // Add elements to document
+      document.head.appendChild(printStyles);
+      document.body.appendChild(printContainer);
+
+      // Print
+      window.print();
+
+      // Clean up
+      setTimeout(() => {
+        document.head.removeChild(printStyles);
+        document.body.removeChild(printContainer);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Print error:', error);
+      toast.error('Print failed.');
+    }
+  };
+
+  const exportToExcel = () => {
+    try {
+      if (!selectedCashBook || transactions.length === 0) {
+        toast.error('No data to export');
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+      const { start, end } = getDateRange();
+      const isBase = selectedCashBook.currency.is_base;
+      
+      // Helper function for date formatting
+      const formatDateTimeDDMMYYYY = () => {
+        const now = new Date();
+        const day = now.getDate().toString().padStart(2, '0');
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const year = now.getFullYear();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+      };
+      
+      const formatDateDDMMYYYY = (date: Date) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}/${month}/${year}`;
+      };
+      
+      // Prepare header information with logo placeholder
+      const headerData = [
+        ['🏢 FinTrack Pro - Financial Management System'], // Added emoji as logo placeholder
+        ['Cash Book Report'],
+        [''],
+        [`Cash Book: ${selectedCashBook.code} - ${selectedCashBook.name}`],
+        [`Currency: ${selectedCashBook.currency.code}`],
+        [`Period: ${formatDateDDMMYYYY(start)} to ${formatDateDDMMYYYY(end)}`],
+        [`Print Date & Time: ${formatDateTimeDDMMYYYY()}`],
+        [''],
+        [''] // Extra space before table
+      ];
+      
+      // Prepare table headers
+      const tableHeaders = isBase
         ? ['Date', 'Narration', 'Debit', 'Credit', 'Balance']
         : ['Date', 'Narration', 'Doc. Amount', 'Currency', 'Rate', 'Debit', 'Credit', 'Balance'];
-
-      // Prepare data for PDF including opening balance
-      const data = [];
+      
+      // Prepare data for export
+      const exportData = [];
       
       // Add opening balance row
-      data.push([
-        'Opening Balance',
-        '',
-        ...(isBase ? [] : ['', '', '']),
-        openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : '',
-        openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : '',
-        formatAmount(openingBalance[0]?.balance || 0)
-      ]);
+      const openingRow = isBase
+        ? ['Opening Balance', '', 
+           openingBalance[0]?.balance > 0 ? openingBalance[0].balance : '',
+           openingBalance[0]?.balance < 0 ? Math.abs(openingBalance[0].balance) : '',
+           openingBalance[0]?.balance || 0]
+        : ['Opening Balance', '', '', '', '',
+           openingBalance[0]?.balance > 0 ? openingBalance[0].balance : '',
+           openingBalance[0]?.balance < 0 ? Math.abs(openingBalance[0].balance) : '',
+           openingBalance[0]?.balance || 0];
       
-      // Add transaction rows
-      transactions.forEach(t => {
-        const baseData = [
-          t.date,
-          t.narration,
-          formatAmount(t.debit),
-          formatAmount(t.credit),
-          formatAmount(t.balance)
-        ];
-
+      exportData.push(openingRow);
+      
+      // Add transaction rows with proper data types
+      transactions.forEach(transaction => {
         if (isBase) {
-          data.push(baseData);
+          exportData.push([
+            transaction.date,
+            transaction.narration,
+            transaction.debit, // Keep as number
+            transaction.credit, // Keep as number
+            transaction.balance // Keep as number
+          ]);
         } else {
-          data.push([
-            t.date,
-            t.narration,
-            formatAmount(t.document_amount),
-            t.currency_code,
-            t.exchange_rate.toFixed(4),
-            formatAmount(t.debit),
-            formatAmount(t.credit),
-            formatAmount(t.balance)
+          exportData.push([
+            transaction.date,
+            transaction.narration,
+            transaction.document_amount, // Keep as number
+            transaction.currency_code,
+            transaction.exchange_rate, // Keep as number
+            transaction.debit, // Keep as number
+            transaction.credit, // Keep as number
+            transaction.balance // Keep as number
           ]);
         }
       });
-
-      // Add totals row
-      data.push([
-        'Totals',
-        '',
-        ...(isBase ? [] : [
-          formatAmount(totals.docAmount),
-          '',
-          ''
-        ]),
-        formatAmount(totals.debit),
-        formatAmount(totals.credit),
-        ''
-      ]);
-
+      
+      // Add totals row with proper number formatting
+      const totalsRow = isBase
+        ? ['Totals', '', totals.debit, totals.credit, '']
+        : ['Totals', '', totals.docAmount, '', '', totals.debit, totals.credit, ''];
+      
+      exportData.push(totalsRow);
+      
       // Add closing balance row
-      data.push([
-        'Closing Balance',
-        '',
-        ...(isBase ? [] : ['', '', '']),
-        '',
-        '',
-        formatAmount(closingBalance[0]?.balance || 0)
-      ]);
-
-      // Generate table
-      (doc as any).autoTable({
-        startY: yPos + 5,
-        head: [columns],
-        body: data,
-        theme: 'grid',
-        styles: {
-          fontSize: 8,
-          cellPadding: 2
-        },
-        columnStyles: {
-          0: { cellWidth: 20 }, // Date
-          1: { cellWidth: isBase ? 100 : 60 }, // Narration
-          ...(isBase ? {} : {
-            2: { cellWidth: 25, halign: 'right' }, // Doc Amount
-            3: { cellWidth: 20 }, // Currency
-            4: { cellWidth: 20, halign: 'right' } // Rate
-          }),
-          [isBase ? 2 : 5]: { cellWidth: 25, halign: 'right' }, // Debit
-          [isBase ? 3 : 6]: { cellWidth: 25, halign: 'right' }, // Credit
-          [isBase ? 4 : 7]: { cellWidth: 25, halign: 'right' } // Balance
+      const closingRow = isBase
+        ? ['Closing Balance', '', '', '', closingBalance[0]?.balance || 0]
+        : ['Closing Balance', '', '', '', '', '', '', closingBalance[0]?.balance || 0];
+      
+      exportData.push(closingRow);
+      
+      // Combine all data
+      const allData = [
+        ...headerData,
+        tableHeaders,
+        ...exportData
+      ];
+      
+      // Create worksheet
+      const ws = XLSX.utils.aoa_to_sheet(allData);
+      
+      // Set column widths
+      const colWidths = isBase
+        ? [
+            { wch: 12 }, // Date
+            { wch: 40 }, // Narration
+            { wch: 15 }, // Debit
+            { wch: 15 }, // Credit
+            { wch: 15 }  // Balance
+          ]
+        : [
+            { wch: 12 }, // Date
+            { wch: 30 }, // Narration
+            { wch: 15 }, // Doc. Amount
+            { wch: 10 }, // Currency
+            { wch: 12 }, // Rate
+            { wch: 15 }, // Debit
+            { wch: 15 }, // Credit
+            { wch: 15 }  // Balance
+          ];
+      
+      ws['!cols'] = colWidths;
+      
+      // Style the header rows
+      const headerRowCount = headerData.length;
+      const tableHeaderRow = headerRowCount;
+      const totalsRowIndex = headerRowCount + 1 + exportData.length - 2; // -2 because totals is second to last
+      const closingRowIndex = headerRowCount + 1 + exportData.length - 1; // -1 because closing is last
+      
+      // Apply styles to specific cells
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      
+      // Style company name (first row) - LEFT ALIGNED
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 16 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+      
+      // Style report title (second row) - LEFT ALIGNED
+      if (ws['A2']) {
+        ws['A2'].s = {
+          font: { bold: true, sz: 14 },
+          alignment: { horizontal: 'left' }
+        };
+      }
+      
+      // Style table headers
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRow, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'F0F0F0' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            }
+          };
         }
-      });
-
-      doc.save('cash_book_report.pdf');
-      toast.success('Report exported successfully');
+      }
+      
+      // Define number format for currency
+      const currencyFormat = '#,##0.00';
+      
+      // Get column indices for different data types based on base currency
+      const numberColumns = isBase
+        ? [2, 3, 4] // Debit, Credit, Balance
+        : [2, 4, 5, 6, 7]; // Doc Amount, Rate, Debit, Credit, Balance
+      
+      // Apply number formatting to data rows
+      for (let row = headerRowCount + 1; row <= headerRowCount + exportData.length; row++) {
+        numberColumns.forEach(colIndex => {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: colIndex });
+          if (ws[cellAddress]) {
+            ws[cellAddress].s = {
+              numFmt: colIndex === 4 && !isBase ? '#,##0.0000' : currencyFormat, // Rate format for non-base
+              alignment: { horizontal: 'right' }
+            };
+          }
+        });
+      }
+      
+      // Style totals row
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: totalsRowIndex, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E6F3FF' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            },
+            numFmt: numberColumns.includes(col) ? (col === 4 && !isBase ? '#,##0.0000' : currencyFormat) : undefined,
+            alignment: { horizontal: numberColumns.includes(col) ? 'right' : 'left' }
+          };
+        }
+      }
+      
+      // Style closing balance row
+      for (let col = 0; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: closingRowIndex, c: col });
+        if (ws[cellAddress]) {
+          ws[cellAddress].s = {
+            font: { bold: true },
+            fill: { fgColor: { rgb: 'E6F3FF' } },
+            border: {
+              top: { style: 'thin' },
+              bottom: { style: 'thin' },
+              left: { style: 'thin' },
+              right: { style: 'thin' }
+            },
+            numFmt: numberColumns.includes(col) ? (col === 4 && !isBase ? '#,##0.0000' : currencyFormat) : undefined,
+            alignment: { horizontal: numberColumns.includes(col) ? 'right' : 'left' }
+          };
+        }
+      }
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Cash Book Report');
+      
+      // Generate filename with date
+      const filename = `Cash_Book_Report_${selectedCashBook.code}_${format(start, 'ddMMyyyy')}_to_${format(end, 'ddMMyyyy')}.xlsx`;
+      
+      // Save the file
+      XLSX.writeFile(wb, filename);
+      
+      toast.success('Exported to Excel successfully');
     } catch (error) {
-      console.error('Error exporting to PDF:', error);
-      toast.error('Failed to export report');
+      console.error('Error exporting to Excel:', error);
+      toast.error('Failed to export to Excel');
     }
   };
 
@@ -476,21 +1210,51 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Cash Book Report</h1>
-        <button
-          onClick={exportToPDF}
-          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={!selectedCashBook || transactions.length === 0}
-        >
-          <FileText className="w-4 h-4" />
-          Export PDF
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handlePrint}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              !selectedCashBook || transactions.length === 0
+                ? 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed opacity-50'
+                : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-blue-800 hover:border-blue-900'
+            }`}
+            disabled={!selectedCashBook || transactions.length === 0}
+          >
+            <Printer className="w-4 h-4" />
+            Print
+          </button>
+          <button
+            onClick={exportToExcel}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              !selectedCashBook || transactions.length === 0
+                ? 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed opacity-50'
+                : 'bg-green-600 text-white hover:bg-green-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-green-800 hover:border-green-900'
+            }`}
+            disabled={!selectedCashBook || transactions.length === 0}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Excel
+          </button>
+          <button
+            onClick={exportToPDF}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transform transition-all duration-200 shadow-lg border-b-4 ${
+              !selectedCashBook || transactions.length === 0
+                ? 'bg-gray-400 text-gray-600 border-gray-500 cursor-not-allowed opacity-50'
+                : 'bg-red-600 text-white hover:bg-red-700 hover:shadow-xl hover:scale-105 active:scale-95 active:shadow-md border-red-800 hover:border-red-900'
+            }`}
+            disabled={!selectedCashBook || transactions.length === 0}
+          >
+            <FileText className="w-4 h-4" />
+            PDF
+          </button>
+        </div>
       </div>
 
       <div className="bg-card rounded-lg shadow">
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Cash Book
               </label>
               <select
@@ -512,7 +1276,7 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label className="block text-sm font-medium text-foreground mb-1">
                 Date Range
               </label>
               <select
@@ -529,7 +1293,7 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
             {dateRange === 'custom' && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     From Date
                   </label>
                   <input
@@ -541,7 +1305,7 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     To Date
                   </label>
                   <input
@@ -599,8 +1363,8 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
               <tbody className="divide-y dark:divide-gray-700">
                 {/* Opening Balance Row */}
                 {selectedCashBook && (
-                  <tr className="bg-blue-50 dark:bg-blue-900/10">
-                    <td className="py-3 font-medium">Opening Balance</td>
+                  <tr>
+                    <td className="py-3">Opening Balance</td>
                     <td className="py-3"></td>
                     {!selectedCashBook.currency.is_base && (
                       <>
@@ -609,13 +1373,13 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
                         <td className="py-3"></td>
                       </>
                     )}
-                    <td className="py-3 text-right font-medium">
+                    <td className="py-3 text-right">
                       {openingBalance[0]?.balance > 0 ? formatAmount(openingBalance[0].balance) : ''}
                     </td>
-                    <td className="py-3 text-right font-medium">
+                    <td className="py-3 text-right">
                       {openingBalance[0]?.balance < 0 ? formatAmount(Math.abs(openingBalance[0].balance)) : ''}
                     </td>
-                    <td className="py-3 text-right font-medium">
+                    <td className="py-3 text-right">
                       {formatAmount(openingBalance[0]?.balance || 0)}
                     </td>
                   </tr>
@@ -662,11 +1426,11 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
                   </tr>
                 )}
               </tbody>
-              {/* Closing Balance Row */}
+              {/* Total / Closing Balance Row */}
               {selectedCashBook && (transactions.length > 0 || openingBalance[0]?.balance !== 0) && (
                 <tfoot>
-                  <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 font-semibold">
-                    <td className="py-3">Totals</td>
+                  <tr className="border-t-2 border-gray-300 dark:border-gray-600 font-semibold">
+                    <td className="py-3">Total / Closing Balance</td>
                     <td className="py-3"></td>
                     {!selectedCashBook.currency.is_base && (
                       <>
@@ -677,20 +1441,6 @@ const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'y
                     )}
                     <td className="py-3 text-right">{formatAmount(totals.debit)}</td>
                     <td className="py-3 text-right">{formatAmount(totals.credit)}</td>
-                    <td className="py-3 text-right"></td>
-                  </tr>
-                  <tr className="border-t border-gray-300 dark:border-gray-600 font-semibold">
-                    <td className="py-3">Closing Balance</td>
-                    <td className="py-3"></td>
-                    {!selectedCashBook.currency.is_base && (
-                      <>
-                        <td className="py-3"></td>
-                        <td className="py-3"></td>
-                        <td className="py-3"></td>
-                      </>
-                    )}
-                    <td className="py-3"></td>
-                    <td className="py-3"></td>
                     <td className="py-3 text-right">
                       {formatAmount(closingBalance[0]?.balance || 0)}
                     </td>
