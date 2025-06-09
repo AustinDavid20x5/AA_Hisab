@@ -515,16 +515,29 @@ export default function Dashboard() {
     const previousMonthStart = format(startOfMonth(previousMonthDate), 'yyyy-MM-dd');
     const previousMonthEnd = format(endOfMonth(previousMonthDate), 'yyyy-MM-dd');
     
+    // Debug logging
+    console.log('Date Range Calculation:', {
+      selectedMonth: format(selectedMonth, 'yyyy-MM-dd'),
+      currentPeriod: `${startDate} to ${endDate}`,
+      previousPeriod: `${previousMonthStart} to ${previousMonthEnd}`,
+      currentMonthNum: selectedMonth.getMonth() + 1,
+      previousMonthNum: previousMonthDate.getMonth() + 1,
+      currentYear: selectedMonth.getFullYear(),
+      previousYear: previousMonthDate.getFullYear()
+    });
+    
     // Verify that we have different months
-     const currentMonth = selectedMonth.getMonth();
-     const prevMonth = previousMonthDate.getMonth();
-     const currentYear = selectedMonth.getFullYear();
-     const prevYear = previousMonthDate.getFullYear();
-     
-     // Ensure we're actually comparing different months
-     if (currentMonth === prevMonth && currentYear === prevYear) {
-       console.warn('Warning: Current and previous month are the same!');
-     }
+    const currentMonth = selectedMonth.getMonth();
+    const prevMonth = previousMonthDate.getMonth();
+    const currentYear = selectedMonth.getFullYear();
+    const prevYear = previousMonthDate.getFullYear();
+    
+    // Ensure we're actually comparing different months
+    if (currentMonth === prevMonth && currentYear === prevYear) {
+      console.warn('Warning: Current and previous month are the same!');
+      console.warn('Current month details:', { currentMonth, currentYear });
+      console.warn('Previous month details:', { prevMonth, prevYear });
+    }
     
     return {
       startDate,
@@ -1329,38 +1342,38 @@ export default function Dashboard() {
         .from('gl_transactions')
         .select(`
           credit,
-          header:gl_headers(
+          gl_headers!inner(
             transaction_date,
             status
           )
         `)
         .eq('account_id', commissionAccountId)
-        .eq('header.status', 'posted')
-        .gte('header.transaction_date', dateRange.startDate)
-        .lte('header.transaction_date', dateRange.endDate);
+        .eq('gl_headers.status', 'posted')
+        .gte('gl_headers.transaction_date', dateRange.startDate)
+        .lte('gl_headers.transaction_date', dateRange.endDate);
 
       if (currentMonthError) throw currentMonthError;
       console.log('Current month data retrieved:', currentMonthData?.length || 0, 'transactions');
-      console.log('Current month sample transactions:', currentMonthData?.slice(0, 3).map(t => ({ credit: t.credit, date: t.header?.transaction_date })));
+      console.log('Current month sample transactions:', currentMonthData?.slice(0, 3).map(t => ({ credit: t.credit, date: t.gl_headers?.transaction_date, headerData: t.gl_headers })));
 
       // Get previous month commission
       const { data: previousMonthData, error: previousMonthError } = await supabase
         .from('gl_transactions')
         .select(`
           credit,
-          header:gl_headers(
+          gl_headers!inner(
             transaction_date,
             status
           )
         `)
         .eq('account_id', commissionAccountId)
-        .eq('header.status', 'posted')
-        .gte('header.transaction_date', dateRange.previousMonthStart)
-        .lte('header.transaction_date', dateRange.previousMonthEnd);
+        .eq('gl_headers.status', 'posted')
+        .gte('gl_headers.transaction_date', dateRange.previousMonthStart)
+        .lte('gl_headers.transaction_date', dateRange.previousMonthEnd);
 
       if (previousMonthError) throw previousMonthError;
       console.log('Previous month data retrieved:', previousMonthData?.length || 0, 'transactions');
-      console.log('Previous month sample transactions:', previousMonthData?.slice(0, 3).map(t => ({ credit: t.credit, date: t.header?.transaction_date })));
+      console.log('Previous month sample transactions:', previousMonthData?.slice(0, 3).map(t => ({ credit: t.credit, date: t.gl_headers?.transaction_date, headerData: t.gl_headers })));
 
       // Calculate total commission for current month
       let currentMonthCommission = 0;
@@ -1375,9 +1388,16 @@ export default function Dashboard() {
       }
       
       // Verify data integrity - check if we have overlapping transactions
-      const currentDates = currentMonthData?.map(t => t.header?.transaction_date) || [];
-      const previousDates = previousMonthData?.map(t => t.header?.transaction_date) || [];
+      const currentDates = currentMonthData?.map(t => t.gl_headers?.transaction_date).filter(date => date != null) || [];
+      const previousDates = previousMonthData?.map(t => t.gl_headers?.transaction_date).filter(date => date != null) || [];
       const overlappingDates = currentDates.filter(date => previousDates.includes(date));
+      
+      console.log('Date extraction debug:', {
+        currentDatesCount: currentDates.length,
+        previousDatesCount: previousDates.length,
+        sampleCurrentDates: currentDates.slice(0, 3),
+        samplePreviousDates: previousDates.slice(0, 3)
+      });
       
       if (overlappingDates.length > 0) {
         console.warn('Warning: Found overlapping transaction dates between current and previous month:', overlappingDates);
