@@ -210,26 +210,24 @@ function EditModal({ account, isOpen, onClose, onSave, subCategories, currencies
             </div>
           </div>
 
-          {formData.is_cashbook && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Currency *
-              </label>
-              <select
-                value={formData.currency_id || ''}
-                onChange={(e) => setFormData({ ...formData, currency_id: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="">Select Currency</option>
-                {currencies.map((currency) => (
-                  <option key={currency.id} value={currency.id}>
-                    {currency.code} - {currency.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Currency {(formData.is_cashbook || subCategories.find(sub => sub.id === formData.subcategory_id)?.name === 'Bank') ? '*' : ''}
+            </label>
+            <select
+              value={formData.currency_id || ''}
+              onChange={(e) => setFormData({ ...formData, currency_id: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required={formData.is_cashbook || subCategories.find(sub => sub.id === formData.subcategory_id)?.name === 'Bank'}
+            >
+              <option value="">Select Currency</option>
+              {currencies.map((currency) => (
+                <option key={currency.id} value={currency.id}>
+                  {currency.code} - {currency.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div className="flex items-center">
             <input
@@ -379,7 +377,7 @@ export default function ChartOfAccounts() {
             subcategory_id: accountData.subcategory_id,
             zakat_eligible: accountData.zakat_eligible,
             is_cashbook: accountData.is_cashbook,
-            currency_id: accountData.is_cashbook ? accountData.currency_id : null,
+            currency_id: accountData.currency_id || null,
             is_active: accountData.is_active,
             updated_at: new Date().toISOString()
           })
@@ -403,7 +401,7 @@ export default function ChartOfAccounts() {
             subcategory_id: accountData.subcategory_id,
             zakat_eligible: accountData.zakat_eligible,
             is_cashbook: accountData.is_cashbook,
-            currency_id: accountData.is_cashbook ? accountData.currency_id : null,
+            currency_id: accountData.currency_id || null,
             is_active: accountData.is_active
           });
 

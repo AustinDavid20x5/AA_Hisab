@@ -15,6 +15,8 @@ import TransactionType from './pages/master/TransactionType';
 
 import CashEntry from './pages/transactions/CashEntry';
 import EditCashEntry from './pages/transactions/EditCashEntry';
+import BankEntry from './pages/transactions/BankEntry';
+import EditBankEntry from './pages/transactions/EditBankEntry';
 import InterpartyTransfer from './pages/transactions/InterpartyTransfer';
 import EditInterpartyTransfer from './pages/transactions/EditInterpartyTransfer';
 import BankTransfer from './pages/transactions/BankTransfer';
@@ -28,6 +30,7 @@ import UserProfiles from './pages/users/UserProfiles';
 import RolesManagement from './pages/users/RolesManagement';
 import GeneralLedger from './pages/reports/GeneralLedger';
 import TrialBalance from './pages/reports/TrialBalance';
+import BankBook from './pages/reports/BankBook';
 import CashBook from './pages/reports/CashBook';
 import CommissionReport from './pages/reports/CommissionReport';
 
@@ -54,6 +57,9 @@ function App() {
               <Route path="/transactions/cash" element={<CashEntry />} />
               <Route path="/transactions/cash/edit/:id" element={<EditCashEntry />} />
               
+              <Route path="/transactions/bank-entry" element={<BankEntry />} />
+            <Route path="/transactions/bank-entry/edit/:id" element={<EditBankEntry />} />
+              
               <Route path="/transactions/ipt" element={<InterpartyTransfer />} />
               <Route path="/transactions/ipt/edit/:id" element={<EditInterpartyTransfer />} />
               
@@ -69,6 +75,7 @@ function App() {
               {/* Reports */}
               <Route path="/reports/gl" element={<GeneralLedger />} />
               <Route path="/reports/trial-balance" element={<TrialBalance />} />
+              <Route path="/reports/bank-book" element={<BankBook />} />
               <Route path="/reports/cash-book" element={<CashBook />} />
               <Route path="/reports/commission" element={<CommissionReport />} />
               

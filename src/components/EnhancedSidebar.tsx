@@ -59,6 +59,7 @@ const navigation = [
     icon: CreditCard,
     children: [
       { name: 'Cash Entry', path: '/transactions/cash' },
+      { name: 'Bank Entry', path: '/transactions/bank-entry' },
       { name: 'Interparty Transfer', path: '/transactions/ipt' },
       { name: 'Bank Transfer and Manager Cheque', path: '/transactions/bank' },
       { name: 'Journal Voucher', path: '/transactions/jv' },
@@ -71,6 +72,7 @@ const navigation = [
     children: [
       { name: 'General Ledger', path: '/reports/gl' },
       { name: 'Trial Balance', path: '/reports/trial-balance' },
+      { name: 'Bank Book', path: '/reports/bank-book' },
       { name: 'Cash Book', path: '/reports/cash-book' },
       { name: 'Commission Report', path: '/reports/commission' },
     ],
