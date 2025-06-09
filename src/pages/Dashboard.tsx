@@ -489,7 +489,8 @@ export default function Dashboard() {
   const [commissionSummary, setCommissionSummary] = useState<CommissionSummary[]>([]);
   const [topCustomers, setTopCustomers] = useState<BusinessPartner[]>([]);
   const [topSuppliers, setTopSuppliers] = useState<BusinessPartner[]>([]);
-  const [recentCashTransactions, setRecentCashTransactions] = useState<Transaction[]>([]);
+  const [propertyAccounts, setPropertyAccounts] = useState<{name: string, balance: number}[]>([]);
+  const [personalAccounts, setPersonalAccounts] = useState<{name: string, balance: number}[]>([]);
   const [commissionComparison, setCommissionComparison] = useState({
     currentMonth: 0,
     previousMonth: 0,
@@ -573,7 +574,8 @@ export default function Dashboard() {
           fetchCommissionSummary(),
           fetchTopCustomers(),
           fetchTopSuppliers(),
-          fetchRecentCashTransactions(),
+          fetchPropertyAccounts(),
+          fetchPersonalAccounts(),
           fetchCommissionComparison()
         ]);
 
@@ -1181,75 +1183,129 @@ export default function Dashboard() {
   }, [dateRange, baseCurrency]);
   
 
-  const fetchRecentCashTransactions = useCallback(async () => {
+  const fetchPropertyAccounts = useCallback(async () => {
     try {
-      // Get CASH transaction type ID and recent transactions in a single optimized query
-      const { data: cashType, error: typeError } = await supabase
-        .from('tbl_trans_type')
-        .select('type_id')
-        .eq('transaction_type_code', 'CASH')
-        .single();
-
-      if (typeError) throw typeError;
-
-      // Get recent cash transactions
-      const { data: headers, error: headersError } = await supabase
-        .from('gl_headers')
+      // Get Property accounts with their balances
+      const { data: accounts, error } = await supabase
+        .from('chart_of_accounts')
         .select(`
           id,
-          voucher_no,
-          transaction_date,
-          description,
-          gl_transactions(
-            debit,
-            credit,
-            account:chart_of_accounts(id, name)
+          name,
+          subcategory:subcategories (
+            name
           )
         `)
-        .eq('type_id', cashType.type_id)
-        .eq('status', 'posted')
-        .order('transaction_date', { ascending: false })
-        .limit(5);
+        .eq('subcategory_id', 'a3e26ba4-4979-41a4-ac43-0c48257f763c')
+        .eq('is_active', true);
 
-      if (headersError) throw headersError;
-
-      if (!headers?.length) {
-        setRecentCashTransactions([]);
+      if (error) {
+        console.error('Error fetching property accounts:', error);
+        setPropertyAccounts([]);
         return;
       }
 
-      // Format transactions
-      const formattedTransactions = headers.map(header => {
-        // Find cash book transaction
-        const cashTrans = header.gl_transactions.find(
-          t => t.account?.name && (t.debit > 0 || t.credit > 0)
-        );
+      // Get balances for these accounts by calculating from gl_transactions
+      const accountBalances = await Promise.all(
+        accounts?.map(async (account) => {
+          const { data: transactions, error: balanceError } = await supabase
+            .from('gl_transactions')
+            .select(`
+              debit,
+              credit,
+              gl_headers!inner (
+                status,
+                transaction_date
+              )
+            `)
+            .eq('account_id', account.id)
+            .eq('gl_headers.status', 'posted')
+            .lte('gl_headers.transaction_date', new Date().toISOString().split('T')[0]);
 
-        // Find partner transaction
-        const partnerTrans = header.gl_transactions.find(
-          t => t.account?.id !== cashTrans?.account?.id
-        );
+          if (balanceError) {
+            console.error(`Error fetching transactions for account ${account.name}:`, balanceError);
+            return { name: account.name, balance: 0 };
+          }
 
-        // Get amount (positive for debit, negative for credit)
-        const amount = cashTrans?.debit ? cashTrans.debit : -(cashTrans?.credit || 0);
+          // Calculate balance as SUM(debit) - SUM(credit)
+          const balance = transactions?.reduce((sum, transaction) => {
+            return sum + (transaction.debit || 0) - (transaction.credit || 0);
+          }, 0) || 0;
 
-        return {
-          id: header.id,
-          date: format(new Date(header.transaction_date), 'dd/MM/yyyy'),
-          voucher_no: header.voucher_no,
-          description: header.description,
-          amount,
-          currency_code: baseCurrency,
-          partner: partnerTrans?.account?.name || ''
-        };
-      });
+          return {
+            name: account.name,
+            balance: balance
+          };
+        }) || []
+      );
 
-      setRecentCashTransactions(formattedTransactions);
+      setPropertyAccounts(accountBalances);
     } catch (error) {
-      console.error('Error fetching recent cash transactions:', error);
-      throw error;
+      console.error('Error fetching property accounts:', error);
+      setPropertyAccounts([]);
     }
-  }, [baseCurrency]);
+  }, []);
+
+  const fetchPersonalAccounts = useCallback(async () => {
+    try {
+      // Get Personal accounts with their balances
+      const { data: accounts, error } = await supabase
+        .from('chart_of_accounts')
+        .select(`
+          id,
+          name,
+          subcategory:subcategories (
+            name
+          )
+        `)
+        .eq('subcategory_id', '452474d5-eeee-4953-8e91-5788f6c1e355')
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('Error fetching personal accounts:', error);
+        setPersonalAccounts([]);
+        return;
+      }
+
+      // Get balances for these accounts by calculating from gl_transactions
+      const accountBalances = await Promise.all(
+        accounts?.map(async (account) => {
+          const { data: transactions, error: balanceError } = await supabase
+            .from('gl_transactions')
+            .select(`
+              debit,
+              credit,
+              gl_headers!inner (
+                status,
+                transaction_date
+              )
+            `)
+            .eq('account_id', account.id)
+            .eq('gl_headers.status', 'posted')
+            .lte('gl_headers.transaction_date', new Date().toISOString().split('T')[0]);
+
+          if (balanceError) {
+            console.error(`Error fetching transactions for account ${account.name}:`, balanceError);
+            return { name: account.name, balance: 0 };
+          }
+
+          // Calculate balance as SUM(debit) - SUM(credit)
+          const balance = transactions?.reduce((sum, transaction) => {
+            return sum + (transaction.debit || 0) - (transaction.credit || 0);
+          }, 0) || 0;
+
+          return {
+            name: account.name,
+            balance: balance
+          };
+        }) || []
+      );
+
+      setPersonalAccounts(accountBalances);
+    } catch (error) {
+      console.error('Error fetching personal accounts:', error);
+      setPersonalAccounts([]);
+    }
+  }, []);
 
   const fetchCommissionComparison = useCallback(async () => {
     const timestamp = new Date().toISOString();
@@ -1908,79 +1964,94 @@ export default function Dashboard() {
         </Card>
       </div>
       
-      {/* Recent Cash Transactions */}
-      <Card className="border-0 shadow-2xl transform transition-all duration-500 hover:shadow-3xl hover:-translate-y-1 bg-gradient-to-br from-background via-background to-primary/5 backdrop-blur-sm">
-        <CardHeader className="bg-gradient-to-r from-primary/15 to-primary/8 border-b border-border/50 backdrop-blur-sm relative overflow-hidden rounded-t-lg">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
-          <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2 drop-shadow-sm relative z-10">
-            <div className="p-2 rounded-xl bg-primary/10 backdrop-blur-sm shadow-inner">
-              <TrendingUp className="w-5 h-5 text-primary drop-shadow-sm" />
+      {/* Account Balances - Property and Personal */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Property Accounts */}
+        <Card className="border-0 shadow-2xl transform transition-all duration-500 hover:shadow-3xl hover:-translate-y-1 bg-gradient-to-br from-background via-background to-primary/5 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-primary/15 to-primary/8 border-b border-border/50 backdrop-blur-sm relative overflow-hidden rounded-t-lg">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
+            <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2 drop-shadow-sm relative z-10">
+              <div className="p-2 rounded-xl bg-primary/10 backdrop-blur-sm shadow-inner">
+                <Building2 className="w-5 h-5 text-primary drop-shadow-sm" />
+              </div>
+              Property Accounts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <div className="space-y-3">
+              {isLoading ? (
+                Array(3).fill(0).map((_, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                    <div className="animate-pulse bg-muted h-4 w-32 rounded"></div>
+                    <div className="animate-pulse bg-muted h-4 w-20 rounded"></div>
+                  </div>
+                ))
+              ) : propertyAccounts.length > 0 ? (
+                propertyAccounts.map((account, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <span className="font-medium text-foreground">{account.name}</span>
+                    <span className={`font-bold ${
+                      account.balance >= 0 
+                        ? 'text-green-600 dark:text-green-400' 
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {formatAmount(Math.abs(account.balance))}
+                      {account.balance < 0 ? ' (Cr)' : ' (Dr)'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No property accounts found
+                </div>
+              )}
             </div>
-            Recent Cash Transactions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pb-12">
-          <div className="overflow-x-hidden max-w-full pb-8 pr-4">
-          <table className="w-full min-w-0">
-              <thead>
-                <tr className="text-left border-b border-border">
-                  <th className="pb-3 font-semibold text-foreground">Date</th>
-                  <th className="pb-3 font-semibold text-foreground">Voucher No</th>
-                  <th className="pb-3 font-semibold text-foreground">Description</th>
-                  <th className="pb-3 font-semibold text-foreground">Partner</th>
-                  <th className="pb-3 font-semibold text-right text-foreground">{baseCurrency}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {isLoading ? (
-                  Array(5).fill(0).map((_, i) => (
-                    <tr key={i}>
-                      <td className="py-3">
-                        <div className="animate-pulse bg-muted h-4 w-20 rounded"></div>
-                      </td>
-                      <td className="py-3">
-                        <div className="animate-pulse bg-muted h-4 w-24 rounded"></div>
-                      </td>
-                      <td className="py-3">
-                        <div className="animate-pulse bg-muted h-4 w-40 rounded"></div>
-                      </td>
-                      <td className="py-3">
-                        <div className="animate-pulse bg-muted h-4 w-32 rounded"></div>
-                      </td>
-                      <td className="py-3 text-right">
-                        <div className="animate-pulse bg-muted h-4 w-20 ml-auto rounded"></div>
-                      </td>
-                    </tr>
-                  ))
-                ) : recentCashTransactions.length > 0 ? (
-                  recentCashTransactions.map((transaction, index) => (
-                    <tr key={index}>
-                      <td className="py-3 text-foreground">{transaction.date}</td>
-                      <td className="py-3 text-foreground">{transaction.voucher_no}</td>
-                      <td className="py-3 text-foreground">{transaction.description}</td>
-                      <td className="py-3 text-foreground">{transaction.partner}</td>
-                      <td className={`py-3 text-right font-medium pr-2 ${
-                        transaction.amount >= 0 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                      }`}>
-                        {formatAmount(Math.abs(transaction.amount))}
-                        {transaction.amount < 0 ? ' (Cr)' : ' (Dr)'}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="py-4 text-center text-muted-foreground">
-                      No recent cash transactions found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Personal Accounts */}
+        <Card className="border-0 shadow-2xl transform transition-all duration-500 hover:shadow-3xl hover:-translate-y-1 bg-gradient-to-br from-background via-background to-primary/5 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-primary/15 to-primary/8 border-b border-border/50 backdrop-blur-sm relative overflow-hidden rounded-t-lg">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
+            <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2 drop-shadow-sm relative z-10">
+              <div className="p-2 rounded-xl bg-primary/10 backdrop-blur-sm shadow-inner">
+                <Users className="w-5 h-5 text-primary drop-shadow-sm" />
+              </div>
+              Personal Accounts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-6">
+            <div className="space-y-3">
+              {isLoading ? (
+                Array(3).fill(0).map((_, i) => (
+                  <div key={i} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                    <div className="animate-pulse bg-muted h-4 w-32 rounded"></div>
+                    <div className="animate-pulse bg-muted h-4 w-20 rounded"></div>
+                  </div>
+                ))
+              ) : personalAccounts.length > 0 ? (
+                personalAccounts.map((account, index) => (
+                  <div key={index} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <span className="font-medium text-foreground">{account.name}</span>
+                    <span className={`font-bold ${
+                      account.balance >= 0 
+                        ? 'text-green-600 dark:text-green-400' 
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {formatAmount(Math.abs(account.balance))}
+                      {account.balance < 0 ? ' (Cr)' : ' (Dr)'}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  No personal accounts found
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       </div>
     </DashboardErrorBoundary>
   );
