@@ -56,8 +56,26 @@ export default function EditInterpartyTransfer() {
     date: new Date().toISOString().split('T')[0],
     narration: '',
     amount: '',
-    commission: ''
+    commissionRate: ''
   });
+
+  // Calculate commission based on amount and commission rate
+  const calculateCommission = () => {
+    const amount = parseFloat(formData.amount) || 0;
+    const commissionRate = parseFloat(formData.commissionRate) || 0;
+    const rawCommission = ((amount / 100000) * commissionRate) * 2;
+    return Math.round(rawCommission);
+  };
+
+  // Handle amount change with commission recalculation
+  const handleAmountChange = (value: string) => {
+    setFormData({ ...formData, amount: value });
+  };
+
+  // Handle commission rate change with commission recalculation
+  const handleCommissionRateChange = (value: string) => {
+    setFormData({ ...formData, commissionRate: value });
+  };
 
   useEffect(() => {
     const initializeComponent = async () => {
@@ -116,77 +134,77 @@ export default function EditInterpartyTransfer() {
       }
     };
 
-    initializeComponent();
-  }, [id]);
+      initializeComponent();
+    }, [id]);
 
-  const fetchBusinessPartners = async () => {
-    try {
-      const { data: subcategories, error: subcatError } = await supabase
-        .from('subcategories')
-        .select('id')
-        .eq('name', 'Business Partner')
-        .single();
+    const fetchBusinessPartners = async () => {
+      try {
+        const { data: subcategories, error: subcatError } = await supabase
+          .from('subcategories')
+          .select('id')
+          .eq('name', 'Business Partner')
+          .single();
 
-      if (subcatError) {
-        console.error('Error fetching subcategory:', subcatError);
+        if (subcatError) {
+          console.error('Error fetching subcategory:', subcatError);
+          toast.error('Failed to fetch business partners');
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('chart_of_accounts')
+          .select(`
+            id,
+            code,
+            name
+          `)
+          .eq('is_active', true)
+          .eq('subcategory_id', subcategories.id)
+          .order('name');
+
+        if (error) throw error;
+        setBusinessPartners(data || []);
+      } catch (error) {
+        console.error('Error fetching business partners:', error);
         toast.error('Failed to fetch business partners');
-        return;
       }
+    };
 
-      const { data, error } = await supabase
-        .from('chart_of_accounts')
-        .select(`
-          id,
-          code,
-          name
-        `)
-        .eq('is_active', true)
-        .eq('subcategory_id', subcategories.id)
-        .order('name');
-
-      if (error) throw error;
-      setBusinessPartners(data || []);
-    } catch (error) {
-      console.error('Error fetching business partners:', error);
-      toast.error('Failed to fetch business partners');
-    }
-  };
-
-  const fetchTransaction = async (transactionId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('gl_headers')
-        .select(`
-          id,
-          voucher_no,
-          transaction_date,
-          description,
-          status,
-          type_id,
-          gl_transactions (
+    const fetchTransaction = async (transactionId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('gl_headers')
+          .select(`
             id,
-            debit,
-            credit,
-            amount,
-            debit_doc_currency,
-            credit_doc_currency,
-            exchange_rate,
-            currency_id,
-            account_id,
-            account:chart_of_accounts (
-            code,  
-            id,
-              name
+            voucher_no,
+            transaction_date,
+            description,
+            status,
+            type_id,
+            gl_transactions (
+              id,
+              debit,
+              credit,
+              amount,
+              debit_doc_currency,
+              credit_doc_currency,
+              exchange_rate,
+              currency_id,
+              account_id,
+              account:chart_of_accounts (
+              code,  
+              id,
+                name
+              )
             )
-          )
-        `)
-        .eq('id', transactionId)
-        .single();
+          `)
+          .eq('id', transactionId)
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setTransaction(data);
-      setVoucherNo(data.voucher_no);
+        setTransaction(data);
+        setVoucherNo(data.voucher_no);
 
       // Find from and to partner transactions
       const fromTrans = data.gl_transactions.find(t =>
@@ -201,9 +219,7 @@ export default function EditInterpartyTransfer() {
       );
 
       const commissionTrans = data.gl_transactions.find(t => {
-        return (t.description && t.description.toLowerCase().includes('commission')) ||
-               (t.account && t.account.name.toLowerCase().includes('commission')) &&
-               t.credit > 0;
+        return t.account && t.account.name.toLowerCase().includes('commission') && t.credit > 0;
       });
 
       if (fromTrans) {
@@ -225,14 +241,18 @@ export default function EditInterpartyTransfer() {
       // Safely handle amount calculation
       const amount = fromTrans?.amount || 0;
 
-      // Safely handle commission calculation
-      const commission = commissionTrans?.credit ? (commissionTrans.credit / 2) : 0;
+      // Calculate commission rate from existing commission
+      const commission = commissionTrans?.credit || 0;
+      const commissionRate = amount > 0 ? ((commission / 2) / (amount / 100000)) : 0;
+      
+      // Get narration from commission transaction description
+      const narration = commissionTrans?.description || data.description || '';
 
       setFormData({
         date: data.transaction_date,
-        narration: data.description || '',
+        narration: narration,
         amount: amount.toFixed(2),
-        commission: commission.toFixed(2)
+        commissionRate: commissionRate.toFixed(2)
       });
 
     } catch (error) {
@@ -272,16 +292,11 @@ export default function EditInterpartyTransfer() {
 
     try {
       const amount = parseFloat(formData.amount);
-      // Ensure commission is properly parsed as a number
-      const commission = parseFloat(formData.commission || '0') || 0;
+      const commission = calculateCommission();
+      const halfCommission = commission / 2;
 
       if (isNaN(amount) || amount <= 0) {
         toast.error('Please enter a valid amount');
-        return;
-      }
-
-      if (isNaN(commission)) {
-        toast.error('Invalid commission calculation');
         return;
       }
 
@@ -315,13 +330,13 @@ export default function EditInterpartyTransfer() {
           header_id: transaction.id,
           account_id: commissionAccountId,
           debit: 0,
-          credit: commission * 2,
+          credit: commission,
           debit_doc_currency: 0,
-          credit_doc_currency: commission * 2,
+          credit_doc_currency: commission,
           exchange_rate: 1,
           currency_id: baseCurrencyId,
           description: `COMMISSION AGST TRANSFER FROM ${fromPartner.name.toUpperCase()} TO ${toPartner.name.toUpperCase()}`,
-          amount: commission * 2
+          amount: commission
         });
       }
 
@@ -330,9 +345,9 @@ export default function EditInterpartyTransfer() {
         header_id: transaction.id,
         account_id: fromPartner.id,
         debit: 0,
-        credit: amount - commission,
+        credit: amount - halfCommission,
         debit_doc_currency: 0,
-        credit_doc_currency: amount - commission,
+        credit_doc_currency: amount - halfCommission,
         exchange_rate: 1,
         currency_id: baseCurrencyId,
         description: `TRANSFER ${fromPartner.name.toUpperCase()} TO ${toPartner.name.toUpperCase()}`,
@@ -343,14 +358,14 @@ export default function EditInterpartyTransfer() {
       transactions.push({
         header_id: transaction.id,
         account_id: toPartner.id,
-        debit: amount + commission,
+        debit: amount + halfCommission,
         credit: 0,
-        debit_doc_currency: amount + commission,
+        debit_doc_currency: amount + halfCommission,
         credit_doc_currency: 0,
         exchange_rate: 1,
         currency_id: baseCurrencyId,
         description: `TRANSFER ${fromPartner.name.toUpperCase()} TO ${toPartner.name.toUpperCase()}`,
-        amount: amount 
+        amount: amount
       });
 
       // Insert transactions
@@ -492,7 +507,7 @@ export default function EditInterpartyTransfer() {
                 <input
                   type="number"
                   value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  onChange={(e) => handleAmountChange(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   step="0.01"
                   min="0.01"
@@ -502,15 +517,27 @@ export default function EditInterpartyTransfer() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Commission (Optional)
+                  Commission Rate Per 100k (Optional)
                 </label>
                 <input
                   type="number"
-                  value={formData.commission}
-                  onChange={(e) => setFormData({ ...formData, commission: e.target.value })}
+                  value={formData.commissionRate}
+                  onChange={(e) => handleCommissionRateChange(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   step="0.01"
                   min="0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Calculated Commission
+                </label>
+                <input
+                  type="number"
+                  value={calculateCommission()}
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-600 text-gray-600 dark:text-gray-400"
                 />
               </div>
             </div>

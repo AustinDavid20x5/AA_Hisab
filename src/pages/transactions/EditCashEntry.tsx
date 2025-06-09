@@ -16,7 +16,7 @@ interface CashBook {
   };
 }
 
-interface BusinessPartner {
+interface PartnerOrExpenseAccount {
   id: string;
   code: string;
   name: string;
@@ -57,9 +57,9 @@ export default function EditCashEntry() {
   const navigate = useNavigate();
   
   const [cashBooks, setCashBooks] = useState<CashBook[]>([]);
-  const [businessPartners, setBusinessPartners] = useState<BusinessPartner[]>([]);
+  const [partnerOrExpenseAccounts, setPartnerOrExpenseAccounts] = useState<PartnerOrExpenseAccount[]>([]);
   const [selectedCashBook, setSelectedCashBook] = useState<CashBook | null>(null);
-  const [selectedPartner, setSelectedPartner] = useState<BusinessPartner | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<PartnerOrExpenseAccount | null>(null);
   const [cashBookBalance, setCashBookBalance] = useState<Balance[]>([]);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,8 +96,8 @@ export default function EditCashEntry() {
 
         if (typeError) throw typeError;
 
-        // Fetch cash books and business partners in parallel
-        const [cashBooksResponse, partnersResponse] = await Promise.all([
+        // Fetch cash books and partner/expense accounts in parallel
+        const [cashBooksResponse, subcategoriesResponse] = await Promise.all([
           supabase
             .from('chart_of_accounts')
             .select(`
@@ -115,15 +115,28 @@ export default function EditCashEntry() {
             .eq('is_cashbook', true)
             .eq('is_active', true),
           supabase
-            .from('chart_of_accounts')
-            .select(`
-              id,
-              code,
-              name
-            `)
-            .eq('is_active', true)
-            .order('name')
+            .from('subcategories')
+            .select('id')
+            .in('name', ['Business Partner', 'Expense'])
         ]);
+
+        if (subcategoriesResponse.error) throw subcategoriesResponse.error;
+        
+        const subcategoryIds = subcategoriesResponse.data?.map(sc => sc.id) || [];
+        console.log('Found subcategories:', subcategoriesResponse.data);
+        console.log('Subcategory IDs:', subcategoryIds);
+        
+        // Fetch partner/expense accounts
+        const partnersResponse = await supabase
+          .from('chart_of_accounts')
+          .select(`
+            id,
+            code,
+            name
+          `)
+          .eq('is_active', true)
+          .in('subcategory_id', subcategoryIds)
+          .order('name');
 
         if (cashBooksResponse.error) throw cashBooksResponse.error;
         if (partnersResponse.error) throw partnersResponse.error;
@@ -131,8 +144,11 @@ export default function EditCashEntry() {
         const cashBooksData = cashBooksResponse.data || [];
         const partnersData = partnersResponse.data || [];
         
+        console.log('Cash books data:', cashBooksData);
+        console.log('Partners data:', partnersData);
+        
         setCashBooks(cashBooksData);
-        setBusinessPartners(partnersData);
+        setPartnerOrExpenseAccounts(partnersData);
         
         // Fetch transaction data
         await fetchTransaction(id, cashBooksData, partnersData);
@@ -153,8 +169,29 @@ export default function EditCashEntry() {
   useEffect(() => {
     if (selectedCashBook) {
       fetchCashBookBalance(selectedCashBook.id);
+      // Reset selected partner when cash book changes
+      setSelectedPartner(null);
     }
   }, [selectedCashBook]);
+
+  // Set selected partner after all dependencies are available
+  useEffect(() => {
+    if (!transaction || partnerOrExpenseAccounts.length === 0 || !selectedCashBook) return;
+
+    const partnerTransaction = transaction.gl_transactions.find(
+      (t) => t.account_id !== selectedCashBook.id
+    );
+
+    if (!partnerTransaction) return;
+
+    const match = partnerOrExpenseAccounts.find(p => p.id === partnerTransaction.account_id);
+    if (match) {
+      setSelectedPartner(match);
+      console.log('Selected partner set to:', match.name);
+    } else {
+      console.warn('Partner not found in dropdown options:', partnerTransaction.account_id);
+    }
+  }, [transaction, partnerOrExpenseAccounts, selectedCashBook]);
 
   const fetchCashBookBalance = async (accountId: string) => {
     try {
@@ -176,7 +213,7 @@ export default function EditCashEntry() {
     }
   };
 
-  const fetchTransaction = async (transactionId: string, cashBooksData: CashBook[], partnersData: BusinessPartner[]) => {
+  const fetchTransaction = async (transactionId: string, cashBooksData: CashBook[], partnersData: PartnerOrExpenseAccount[]) => {
     try {
       const { data, error } = await supabase
         .from('gl_headers')
@@ -233,9 +270,7 @@ export default function EditCashEntry() {
       const cashBook = cashBooksData.find(cb => cb.id === cashTransaction.account_id);
       setSelectedCashBook(cashBook || null);
       
-      // Set selected partner
-      const partner = partnersData.find(p => p.id === partnerTransaction.account_id);
-      setSelectedPartner(partner || null);
+      // Partner selection will be handled by useEffect after state updates
       
       // Determine document amount (positive for debit, negative for credit)
       let documentAmount = 0;
@@ -488,19 +523,19 @@ export default function EditCashEntry() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Business Partner
+                  Business Partner or Expense
                 </label>
                 <select
                   value={selectedPartner?.id || ''}
                   onChange={(e) => {
-                    const partner = businessPartners.find(bp => bp.id === e.target.value);
+                    const partner = partnerOrExpenseAccounts.find(bp => bp.id === e.target.value);
                     setSelectedPartner(partner || null);
                   }}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
-                  <option value="">Select Partner</option>
-                  {businessPartners.map(bp => (
+                  <option value="">Select Partner or Expense</option>
+                  {partnerOrExpenseAccounts.map(bp => (
                     <option key={bp.id} value={bp.id}>
                       {bp.name}
                     </option>

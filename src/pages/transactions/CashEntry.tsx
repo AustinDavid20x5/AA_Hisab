@@ -21,7 +21,7 @@ interface CashBook {
   };
 }
 
-interface BusinessPartner {
+interface PartnerOrExpenseAccount {
   id: string;
   code: string;
   name: string;
@@ -57,9 +57,9 @@ interface Balance {
 export default function CashEntry() {
   const navigate = useNavigate();
   const [cashBooks, setCashBooks] = useState<CashBook[]>([]);
-  const [businessPartners, setBusinessPartners] = useState<BusinessPartner[]>([]);
+  const [partnerOrExpenseAccounts, setPartnerOrExpenseAccounts] = useState<PartnerOrExpenseAccount[]>([]);
   const [selectedCashBook, setSelectedCashBook] = useState<CashBook | null>(null);
-  const [selectedPartner, setSelectedPartner] = useState<BusinessPartner | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<PartnerOrExpenseAccount | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cashBookBalance, setCashBookBalance] = useState<Balance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,12 +85,13 @@ export default function CashEntry() {
         ...prev,
         exchangeRate: selectedCashBook.currency.rate.toFixed(4)
       }));
+      setSelectedPartner(null); // ✅ Reset partner/expense dropdown
     }
   }, [selectedCashBook, limit]);
 
   useEffect(() => {
     fetchCashBooks();
-    fetchBusinessPartners();
+    fetchPartnerOrExpenseAccounts();
     initializeCashType();
   }, []);
 
@@ -157,27 +158,28 @@ export default function CashEntry() {
     }
   };
 
-  const fetchBusinessPartners = async () => {
+  const fetchPartnerOrExpenseAccounts = async () => {
     try {
       const { data: subcategories, error: subcatError } = await supabase
         .from('subcategories')
         .select('id')
-        .eq('name', 'Business Partner')
-        .limit(1);
+        .in('name', ['Business Partner', 'Expense'])
+        //.limit(1);
 
       if (subcatError) {
         console.error('Error fetching subcategory:', subcatError);
-        toast.error('Failed to fetch business partners');
+        toast.error('Failed to fetch partner or expense accounts');
         return;
       }
 
       // Handle case where no subcategory is found
       if (!subcategories?.length) {
-        setBusinessPartners([]);
+        setPartnerOrExpenseAccounts([]);
         return;
       }
 
-      const subcategoryId = subcategories[0].id;
+      const subcategoryIds = subcategories.map(sc => sc.id);
+    
       
       const { data, error } = await supabase
         .from('chart_of_accounts')
@@ -187,14 +189,15 @@ export default function CashEntry() {
           name
         `)
         .eq('is_active', true)
-        .eq('subcategory_id', subcategoryId)
+        .in('subcategory_id', subcategoryIds)
         .order('name');
 
       if (error) throw error;
-      setBusinessPartners(data || []);
+      setPartnerOrExpenseAccounts(data || []);
+      setSelectedPartner(null); // Optional: reset dropdown selection
     } catch (error) {
-      console.error('Error fetching business partners:', error);
-      toast.error('Failed to fetch business partners');
+      console.error('Error fetching partner or expense accounts:', error);
+      toast.error('Failed to fetch partner or expense accounts');
     }
   };
 
@@ -551,19 +554,19 @@ export default function CashEntry() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Business Partner
+                Business Partner or Expense
                 </label>
                 <select
                   value={selectedPartner?.id || ''}
                   onChange={(e) => {
-                    const partner = businessPartners.find(bp => bp.id === e.target.value);
+                    const partner = partnerOrExpenseAccounts.find(bp => bp.id === e.target.value);
                     setSelectedPartner(partner || null);
                   }}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
-                  <option value="">Select Partner</option>
-                  {businessPartners.map(bp => (
+                  <option value="">Select Partner or Expense</option>
+                  {partnerOrExpenseAccounts.map(bp => (
                     <option key={bp.id} value={bp.id}>
                       {bp.name}
                     </option>

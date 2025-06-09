@@ -61,6 +61,7 @@ export default function InterpartyTransfer() {
     date: new Date().toISOString().split('T')[0],
     narration: '',
     amount: '',
+    commissionRate: '',
     commission: ''
   });
 
@@ -270,15 +271,17 @@ export default function InterpartyTransfer() {
 
       const transactions = [];
 
+      const halfCommission = commission / 2;
+
       // Commission transaction first
       if (commission > 0) {
         transactions.push({
           header_id: header.id,
           account_id: commissionAccountId,
           debit: 0,
-          credit: commission * 2,
+          credit: commission,
           debit_doc_currency: 0,
-          credit_doc_currency: commission * 2,
+          credit_doc_currency: commission,
           exchange_rate: 1,
           currency_id: baseCurrencyId,
           description: `COMMISSION AGST TRANSFER FROM ${fromPartner.name.toUpperCase()} TO ${toPartner.name.toUpperCase()}`,
@@ -291,9 +294,9 @@ export default function InterpartyTransfer() {
         header_id: header.id,
         account_id: fromPartner.id,
         debit: 0,
-        credit: amount - commission,
+        credit: amount - halfCommission,
         debit_doc_currency: 0,
-        credit_doc_currency: amount - commission,
+        credit_doc_currency: amount - halfCommission,
         exchange_rate: 1,
         currency_id: baseCurrencyId,
         description: `TRANSFER ${fromPartner.name.toUpperCase()} TO ${toPartner.name.toUpperCase()}`,
@@ -304,9 +307,9 @@ export default function InterpartyTransfer() {
       transactions.push({
         header_id: header.id,
         account_id: toPartner.id,
-        debit: amount + commission,
+        debit: amount + halfCommission,
         credit: 0,
-        debit_doc_currency: amount + commission,
+        debit_doc_currency: amount + halfCommission,
         credit_doc_currency: 0,
         exchange_rate: 1,
         currency_id: baseCurrencyId,
@@ -332,6 +335,7 @@ export default function InterpartyTransfer() {
         date: new Date().toISOString().split('T')[0],
         narration: '',
         amount: '',
+        commissionRate: '',
         commission: ''
       });
       setFromPartner(null);
@@ -344,13 +348,41 @@ export default function InterpartyTransfer() {
     }
   };
 
+  // Calculate commission based on amount and commission rate
+  const calculateCommission = (amount: string, commissionRate: string): string => {
+    const amountNum = Number(amount?.trim() || 0);
+    const rateNum = Number(commissionRate?.trim() || 0);
+    
+    if (isNaN(amountNum) || isNaN(rateNum) || amountNum <= 0 || rateNum <= 0) {
+      return '';
+    }
+    
+    const rawCommission = ((amountNum / 100000) * rateNum) * 2;
+    const commission = Math.round(rawCommission); // round to nearest whole number
+    return commission.toString();
+  };
+
+  // Update commission whenever amount or commission rate changes
+  const handleAmountChange = (value: string) => {
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    const commission = calculateCommission(cleanValue, formData.commissionRate);
+    setFormData({ ...formData, amount: cleanValue, commission });
+  };
+
+  const handleCommissionRateChange = (value: string) => {
+    const cleanValue = value.replace(/[^\d.]/g, '');
+    const commission = calculateCommission(formData.amount, cleanValue);
+    setFormData({ ...formData, commissionRate: cleanValue, commission });
+  };
+
   const handleCancel = () => {
-    if (formData.narration || formData.amount || formData.commission || fromPartner || toPartner) {
+    if (formData.narration || formData.amount || formData.commissionRate || fromPartner || toPartner) {
       if (confirm('Are you sure you want to clear the form?')) {
         setFormData({
           date: new Date().toISOString().split('T')[0],
           narration: '',
           amount: '',
+          commissionRate: '',
           commission: ''
         });
         setFromPartner(null);
@@ -504,7 +536,7 @@ export default function InterpartyTransfer() {
                 <input
                   type="text"
                   value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value.replace(/[^\d.]/g, '') })}
+                  onChange={(e) => handleAmountChange(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
@@ -512,13 +544,27 @@ export default function InterpartyTransfer() {
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Commission (Optional)
+                  Commission Rate Per 100k (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={formData.commissionRate}
+                  onChange={(e) => handleCommissionRateChange(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter rate per 100,000"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Commission (Calculated)
                 </label>
                 <input
                   type="text"
                   value={formData.commission}
-                  onChange={(e) => setFormData({ ...formData, commission: e.target.value.replace(/[^\d.]/g, '') })}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  readOnly
+                  className="w-full px-3 py-2 border rounded-lg bg-gray-50 dark:bg-gray-600 dark:border-gray-600 text-gray-600 dark:text-gray-300"
+                  placeholder="Auto-calculated based on rate"
                 />
               </div>
             </div>
