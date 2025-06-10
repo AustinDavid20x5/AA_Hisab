@@ -33,6 +33,7 @@ import TrialBalance from './pages/reports/TrialBalance';
 import BankBook from './pages/reports/BankBook';
 import CashBook from './pages/reports/CashBook';
 import CommissionReport from './pages/reports/CommissionReport';
+import ZakatCalculation from './pages/reports/ZakatCalculation';
 
 const NotFound = () => <div>404 - Page Not Found</div>;
 
@@ -78,6 +79,7 @@ function App() {
               <Route path="/reports/bank-book" element={<BankBook />} />
               <Route path="/reports/cash-book" element={<CashBook />} />
               <Route path="/reports/commission" element={<CommissionReport />} />
+              <Route path="/reports/zakat-calculation" element={<ZakatCalculation />} />
               
               {/* User Management */}
               <Route path="/users/profiles" element={<UserProfiles />} />

@@ -75,6 +75,7 @@ const navigation = [
       { name: 'Bank Book', path: '/reports/bank-book' },
       { name: 'Cash Book', path: '/reports/cash-book' },
       { name: 'Commission Report', path: '/reports/commission' },
+      { name: 'Zakat Calculation', path: '/reports/zakat-calculation' },
     ],
   },
   {
