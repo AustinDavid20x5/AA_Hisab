@@ -555,6 +555,27 @@ export default function ZakatCalculation() {
             </div>
           </div>
 
+          {/* Summary Section */}
+          {filteredAccounts.length > 0 && (
+            <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4">Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white dark:bg-gray-700 p-4 rounded-lg shadow">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Balance</p>
+                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {baseCurrency?.symbol}{formatAmount(totalBalance)}
+                  </p>
+                </div>
+                <div className="bg-white dark:bg-gray-700 p-4 rounded-lg shadow">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Zakat (2.5%)</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {baseCurrency?.symbol}{formatAmount(zakatAmount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -595,26 +616,7 @@ export default function ZakatCalculation() {
             </table>
           </div>
 
-          {/* Summary Section */}
-          {filteredAccounts.length > 0 && (
-            <div className="mt-8 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <h3 className="text-lg font-semibold mb-4">Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-gray-700 p-4 rounded-lg shadow">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Balance</p>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {baseCurrency?.symbol}{formatAmount(totalBalance)}
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-gray-700 p-4 rounded-lg shadow">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Zakat (2.5%)</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {baseCurrency?.symbol}{formatAmount(zakatAmount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+
         </div>
       </div>
     </div>
